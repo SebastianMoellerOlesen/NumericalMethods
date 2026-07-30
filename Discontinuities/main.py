@@ -26,6 +26,8 @@ def problem_a() -> None:
     plt.figure()
 
     for a in range(3):
+        # Note: We do not have endpoint=False, as we are not dealing with a periodic domain
+        # We hence do want the last elemement in the linspace included.
         x = np.linspace(-1, 1, 30)
         plt.errorbar(x, f(x, a), fmt="--.", label=f"Function for a = {a}")
 
@@ -47,11 +49,13 @@ central_second_order_coeffecients = np.array([-0.5, 0.0, 0.5])
 
 def problem_c() -> None:
 
+    center_zoom = 4
+
     a_vals = range(3)
-    grid_count = 16
-    grid_points = np.linspace(-1, 1, grid_count, endpoint=False)
+    grid_count = 90
+    grid_points = np.linspace(-1.0 / center_zoom, 1.0 / center_zoom, grid_count)
     grid_values = np.stack([f(grid_points, a) for a in a_vals])  # A 3xN array
-    delta_x = 2.0 / grid_count
+    delta_x = 2.0 / grid_count / center_zoom
 
     # We use axis=1, so that we have an array of lenght 3, containing 3xN matrices.
     # This matched the situation we used in problem 2.1, and allows us to calculate using a matrix multiplication
@@ -87,6 +91,71 @@ def problem_c() -> None:
     plt.legend()
     plt.savefig("numerical_derived_comparison.png")
 
+def problem_d() -> None:
+    # We basically just want to use a forward scheme for x > 0, and a backwars scheme otherwise.
+    # That way we only use points on the same side of 0, to calculate the derivative.
+    # Because i am lazy, i won't define the derivative at the border, but there we could just use whatever scheme that fits.
+
+    a_vals = range(3)
+    grid_count = 90
+    grid_points = np.linspace(-1.0 , 1.0 , grid_count)
+    grid_values = np.stack([f(grid_points, a) for a in a_vals])  # A 3xN array
+    delta_x = 2.0 / grid_count
+
+    # We use the [i-2, i+2], so that we don't need to do any logic for which values of u to pass along
+    backward_schem = np.array([  # i-2, i-1, i, i+1, i=2
+                                 0, 0, 1, -4, 3 
+                              ]) / (2 * delta_x)
+
+    forward_scheme = np.array([  # i-2, i-1, i, i+1, i=2
+                                 -3, 4, -1, 0, 0 
+                              ]) / (2 * delta_x)
+
+    # We now have an maxtrix of schemes, which is 5xN
+    schemes = np.stack([forward_scheme if point < 0 else backward_schem for point in grid_points])
+    shifted_values = np.stack(
+        [np.roll(grid_values, -shift) for shift in range(-2, 3)], axis=2
+    )
+    print(shifted_values.shape)
+    print(schemes.shape)
+
+    results = schemes * shifted_values
+    derived_plural = np.sum(results, axis = 2)
+
+    derived_plural = derived_plural[:, 2:-2]
+    derived_points = grid_points[2:-2]
+
+    # DONT DO MATRIX MULT; WE CAN JUST MULTIPLY NUMPY ARRAYS AND SUM AXIS...
+
+    plt.figure()
+
+    sample_distance = 1
+
+    for a, derived in zip(a_vals, derived_plural):
+        plt.errorbar(
+            derived_points[0::sample_distance],
+            derived[0::sample_distance],
+            fmt="--.",
+            label=f"Numeric derived for a = {a}",
+        )
+        plt.errorbar(
+            grid_points[0::sample_distance],
+            f_derived(grid_points[0::sample_distance], a),
+            fmt="--.",
+            label=f"Analytical derived for a = {a}",
+        )
+
+    plt.legend()
+    plt.savefig("numerical_derived_comparison_test.png")
+
+
+    
+
+    
+    
+
+    return
 
 problem_a()
 problem_c()
+problem_d()
