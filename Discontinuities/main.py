@@ -91,6 +91,7 @@ def problem_c() -> None:
     plt.legend()
     plt.savefig("numerical_derived_comparison.png")
 
+
 def problem_d() -> None:
     # We basically just want to use a forward scheme for x > 0, and a backwars scheme otherwise.
     # That way we only use points on the same side of 0, to calculate the derivative.
@@ -98,21 +99,35 @@ def problem_d() -> None:
 
     a_vals = range(3)
     grid_count = 90
-    grid_points = np.linspace(-1.0 , 1.0 , grid_count)
+    grid_points = np.linspace(-1.0, 1.0, grid_count)
     grid_values = np.stack([f(grid_points, a) for a in a_vals])  # A 3xN array
     delta_x = 2.0 / grid_count
 
     # We use the [i-2, i+2], so that we don't need to do any logic for which values of u to pass along
-    backward_schem = np.array([  # i-2, i-1, i, i+1, i=2
-                                 0, 0, 1, -4, 3 
-                              ]) / (2 * delta_x)
+    backward_schem = np.array(
+        [  # i-2, i-1, i, i+1, i=2
+            0,
+            0,
+            1,
+            -4,
+            3,
+        ]
+    ) / (2 * delta_x)
 
-    forward_scheme = np.array([  # i-2, i-1, i, i+1, i=2
-                                 -3, 4, -1, 0, 0 
-                              ]) / (2 * delta_x)
+    forward_scheme = np.array(
+        [  # i-2, i-1, i, i+1, i=2
+            -3,
+            4,
+            -1,
+            0,
+            0,
+        ]
+    ) / (2 * delta_x)
 
     # We now have an maxtrix of schemes, which is 5xN
-    schemes = np.stack([forward_scheme if point < 0 else backward_schem for point in grid_points])
+    schemes = np.stack(
+        [forward_scheme if point < 0 else backward_schem for point in grid_points]
+    )
     shifted_values = np.stack(
         [np.roll(grid_values, -shift) for shift in range(-2, 3)], axis=2
     )
@@ -120,12 +135,11 @@ def problem_d() -> None:
     print(schemes.shape)
 
     results = schemes * shifted_values
-    derived_plural = np.sum(results, axis = 2)
+    derived_plural = np.sum(results, axis=2)
 
+    # Remove the derivatives, which use points from the oposite end.
     derived_plural = derived_plural[:, 2:-2]
     derived_points = grid_points[2:-2]
-
-    # DONT DO MATRIX MULT; WE CAN JUST MULTIPLY NUMPY ARRAYS AND SUM AXIS...
 
     plt.figure()
 
@@ -148,13 +162,8 @@ def problem_d() -> None:
     plt.legend()
     plt.savefig("numerical_derived_comparison_test.png")
 
-
-    
-
-    
-    
-
     return
+
 
 problem_a()
 problem_c()
