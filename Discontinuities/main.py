@@ -160,7 +160,7 @@ def problem_d() -> None:
         )
 
     plt.legend()
-    plt.savefig("numerical_derived_comparison_test.png")
+    plt.savefig("numerical_derived_comparison_centered.png")
 
     return
 

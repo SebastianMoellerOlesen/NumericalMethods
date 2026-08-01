@@ -22,8 +22,9 @@ def problem_a() -> None:
         points_derived.append((u1 - u0) / delta_x)
 
     plt.figure()
-    plt.errorbar(grid_points, points_derived, fmt=".")
-    plt.errorbar(grid_points, true_derived, fmt="--")
+    plt.errorbar(grid_points, points_derived, fmt=".", label = "Numerical")
+    plt.errorbar(grid_points, true_derived, fmt="--", label = "Analytic")
+    plt.legend()
     plt.savefig("forward_derived.png")
 
 
@@ -44,6 +45,7 @@ def problem_b() -> None:
     grid_points = np.linspace(0, 2 * np.pi, grid_count, endpoint=False)
     grid_values = np.sin(grid_points)
     delta_x = 2 * np.pi / grid_count
+    print(delta_x)
 
     # We create all the values we need, as a 7xN matrix, where each column is the i_-3 ... i_+3 values we need.
     # Doing this allows us to calculate the derivatives for the different coeffecients using a single matrix mul.
