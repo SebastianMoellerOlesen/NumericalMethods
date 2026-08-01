@@ -49,13 +49,19 @@ central_second_order_coeffecients = np.array([-0.5, 0.0, 0.5])
 
 def problem_c() -> None:
 
-    center_zoom = 4
+    center_zoom = 50
 
     a_vals = range(3)
-    grid_count = 90
+
+    grid_count = int(1000 / center_zoom)
+    if grid_count % 2 != 0:
+        grid_count += 1
+
     grid_points = np.linspace(-1.0 / center_zoom, 1.0 / center_zoom, grid_count)
     grid_values = np.stack([f(grid_points, a) for a in a_vals])  # A 3xN array
-    delta_x = 2.0 / grid_count / center_zoom
+
+    # The new span / grid_count
+    delta_x = (2.0 / center_zoom) / (grid_count - 1)
 
     # We use axis=1, so that we have an array of lenght 3, containing 3xN matrices.
     # This matched the situation we used in problem 2.1, and allows us to calculate using a matrix multiplication
@@ -97,11 +103,17 @@ def problem_d() -> None:
     # That way we only use points on the same side of 0, to calculate the derivative.
     # Because i am lazy, i won't define the derivative at the border, but there we could just use whatever scheme that fits.
 
+    center_zoom = 50
     a_vals = range(3)
-    grid_count = 90
-    grid_points = np.linspace(-1.0, 1.0, grid_count)
+    grid_count = int(1000 / center_zoom)
+    if grid_count % 2 != 0:
+        grid_count += 1
+
+    grid_points = np.linspace(-1.0 / center_zoom, 1.0 / center_zoom, grid_count)
     grid_values = np.stack([f(grid_points, a) for a in a_vals])  # A 3xN array
-    delta_x = 2.0 / grid_count
+
+    # The new span / grid_count
+    delta_x = (2.0 / center_zoom) / (grid_count - 1)
 
     # We use the [i-2, i+2], so that we don't need to do any logic for which values of u to pass along
     backward_schem = np.array(
@@ -147,16 +159,17 @@ def problem_d() -> None:
 
     for a, derived in zip(a_vals, derived_plural):
         plt.errorbar(
+            grid_points[0::sample_distance],
+            f_derived(grid_points[0::sample_distance], a),
+            fmt="--",
+            label=f"Analytical derived for a = {a}",
+        )
+
+        plt.errorbar(
             derived_points[0::sample_distance],
             derived[0::sample_distance],
             fmt="--.",
             label=f"Numeric derived for a = {a}",
-        )
-        plt.errorbar(
-            grid_points[0::sample_distance],
-            f_derived(grid_points[0::sample_distance], a),
-            fmt="--.",
-            label=f"Analytical derived for a = {a}",
         )
 
     plt.legend()

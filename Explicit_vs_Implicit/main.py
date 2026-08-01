@@ -103,13 +103,13 @@ def problem_c() -> None:
         plt.errorbar(
             times[0::sample_rate],
             implicit_values[0::sample_rate],
-            fmt=".",
+            fmt="--",
             label="Euler (implicit)",
         )
         plt.errorbar(
             times[0::sample_rate],
             explicit_values[0::sample_rate],
-            fmt=".",
+            fmt=",",
             label="Euler (explicit)",
         )
         plt.legend()

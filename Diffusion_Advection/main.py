@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 # This returns a NxN mat, containing the coeffecients.
 # The first and last row are just zeros.
 def create_second_deriv_mat_O2(size: int, delta: float) -> np.ndarray:
@@ -17,6 +18,7 @@ def create_second_deriv_mat_O2(size: int, delta: float) -> np.ndarray:
 
     return mat
 
+
 def create_first_deriv_mat_O2(size: int, delta: float) -> np.ndarray:
 
     first_row = np.zeros(size)
@@ -29,7 +31,8 @@ def create_first_deriv_mat_O2(size: int, delta: float) -> np.ndarray:
     mat[0] = first_row
     mat[-1] = last_row
 
-    return mat    
+    return mat
+
 
 def problem_a() -> None:
 
@@ -46,25 +49,22 @@ def problem_a() -> None:
     A2 = create_second_deriv_mat_O2(grid_count, dx)
     A1 = create_first_deriv_mat_O2(grid_count, dx)
 
-    
     A = (D * A2) - (A1 @ np.diag(v))
 
     b = np.zeros(grid_count)
 
     # We can now use our BC.
-    A[0][0] = 1 # This is f(0)
-    b[0] = 1 # = 1
+    A[0][0] = 1  # This is f(0)
+    b[0] = 1  # = 1
 
-    A[-1][-1] = 1 # This is f(25)
-    b[-1] = 0 # = 0A
-
+    A[-1][-1] = 1  # This is f(25)
+    b[-1] = 0  # = 0A
 
     # Now we can just solve the system.
     f = np.linalg.solve(A, b)
 
     plt.figure()
-    plt.errorbar(grid_points, f, fmt = ".")
-    plt.errorbar(grid_points, v, fmt='--')
+    plt.errorbar(grid_points, f, fmt=".")
     plt.savefig("testing.png")
 
     # We can now check, if out solution is correct, by putting our result back into the equation.
@@ -73,7 +73,7 @@ def problem_a() -> None:
 
 def problem_c() -> None:
 
-    for D in [0, 0.5, 10, 20, 100]:
+    for D in [0, 0.1, 0.5, 10, 20, 100]:
         grid_count = 1000
         grid_points = np.linspace(0, 25, grid_count)
         dx = 25 / (grid_count - 1)
@@ -86,33 +86,28 @@ def problem_c() -> None:
         A2 = create_second_deriv_mat_O2(grid_count, dx)
         A1 = create_first_deriv_mat_O2(grid_count, dx)
 
-    
         A = (D * A2) - (A1 @ np.diag(v))
 
         b = np.zeros(grid_count)
 
         # We can now use our BC.
-        A[0][0] = 1 # This is f(0)
-        b[0] = 1 # = 1
+        A[0][0] = 1  # This is f(0)
+        b[0] = 1  # = 1
 
-        A[-1][-1] = 1 # This is f(25)
-        b[-1] = 0 # = 0A
-
+        A[-1][-1] = 1  # This is f(25)
+        b[-1] = 0  # = 0A
 
         # Now we can just solve the system.
         f = np.linalg.solve(A, b)
 
         plt.figure()
-        plt.title(D)
-        plt.errorbar(grid_points, f, fmt = ".")
-        plt.errorbar(grid_points, v, fmt='--')
+        plt.title(f"Solution for D = {D}")
+        plt.errorbar(grid_points, f, fmt=".")
         plt.savefig(f"testing{D}.png")
 
         # We can now check, if out solution is correct, by putting our result back into the equation.
-        # print(np.abs(D * A2 @ f - A1 @ (np.diag(v) @ f)))    
-    
+        # print(np.abs(D * A2 @ f - A1 @ (np.diag(v) @ f)))
+
 
 problem_a()
 problem_c()
-    
-
