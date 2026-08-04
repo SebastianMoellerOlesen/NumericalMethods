@@ -178,6 +178,7 @@ def problem_d() -> None:
     return
 
 
-problem_a()
-problem_c()
-problem_d()
+if __name__ == "__main__":
+    problem_a()
+    problem_c()
+    problem_d()

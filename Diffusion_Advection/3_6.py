@@ -109,5 +109,6 @@ def problem_c() -> None:
         # print(np.abs(D * A2 @ f - A1 @ (np.diag(v) @ f)))
 
 
-problem_a()
-problem_c()
+if __name__ == "__main__":
+    problem_a()
+    problem_c()

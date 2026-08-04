@@ -143,9 +143,9 @@ def problem_g() -> None:
     plt.legend()
     plt.savefig(plotname)
 
-
-problem_a()
-problem_b()
-problem_c()
-problem_d()
-problem_g()
+if __name__ == "__main__":
+    problem_a()
+    problem_b()
+    problem_c()
+    problem_d()
+    problem_g()

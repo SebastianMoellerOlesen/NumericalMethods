@@ -116,6 +116,7 @@ def problem_c() -> None:
         plt.savefig(f"compare_implicit_explicit_{alpha}.png")
 
 
-problem_a()
-problem_b()
-problem_c()
+if __name__ == "__main__":
+    problem_a()
+    problem_b()
+    problem_c()
