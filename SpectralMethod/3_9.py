@@ -31,7 +31,7 @@ def problem_a() -> None:
     u, x = solve(1000)
 
     plt.figure()
-    plt.errorbar(x, u, fmt = ".", label = "Solved spectral, N = 1000")
+    plt.errorbar(x, u, fmt = "-", label = "Solved spectral, N = 1000")
     plt.legend()
     plt.savefig("SpectralN1000.png")
 
@@ -76,7 +76,7 @@ def problem_c() -> None:
     spectral_true_u, spectral_true_x = solve(1000)
 
     plt.figure()
-    plt.errorbar(spectral_true_x, spectral_true_u, fmt = ".", label = "Spectral using N = 1000")
+    plt.errorbar(spectral_true_x, spectral_true_u, fmt = "-", label = "Spectral using N = 1000")
     plt.errorbar(spectral_x, spectral_u, fmt = "--", label = "Spectral using N = 20")
     plt.errorbar(grid_points, grid_values, fmt = ".", label = "Finite difference using N = 20")
     plt.legend()
