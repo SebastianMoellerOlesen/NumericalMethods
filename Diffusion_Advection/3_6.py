@@ -65,10 +65,11 @@ def problem_a() -> None:
 
     plt.figure()
     plt.errorbar(grid_points, f, fmt=".")
+    plt.show()
     plt.savefig("testing.png")
 
     # We can now check, if out solution is correct, by putting our result back into the equation.
-    print(np.abs(D * A2 @ f - A1 @ (np.diag(v) @ f)))
+    # print(np.abs(D * A2 @ f - A1 @ (np.diag(v) @ f)))
 
 
 def problem_c() -> None:
