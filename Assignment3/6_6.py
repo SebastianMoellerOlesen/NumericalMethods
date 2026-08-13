@@ -113,7 +113,7 @@ def simulate_magnet() -> None:
 
 @njit
 def sim_temps() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    grid_size = 50
+    grid_size = 100
     grid_elements = grid_size**2
     temps = np.linspace(0.1, 5, 100)
 
@@ -161,11 +161,11 @@ def plot_temperatures() -> None:
     temps, energies, magnetisation = sim_temps()
 
     plt.figure()
-    plt.errorbar(temps, energies[:, -1], fmt=".", label="Energies")
+    plt.errorbar(temps, np.average(energies, axis = 1), fmt=".", label="Energies")
     plt.legend()
 
     plt.figure()
-    plt.errorbar(temps, magnetisation[:, -1], fmt=".", label="Magnetisation")
+    plt.errorbar(temps, np.average(energies, axis = 1), fmt=".", label="Magnetisation")
     plt.legend()
 
     plt.show()
