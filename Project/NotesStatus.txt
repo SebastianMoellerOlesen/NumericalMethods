@@ -1,0 +1,7 @@
+Currently we have a bunch of balls spawning in a random location.
+We have a working border, colliding with them, which makes them stay inside the area.
+
+We want to make the balls move according the the pressure gradiant.
+Current i tried to say, Hey! The pressure gradiant is just the the density gradient multiplied by some value.
+I am not intirely sure, this is a correct apprach. So next time, i should calculate the pressure, using the gradient somehow.
+Then i should use the formulas in the paper, to calculate the pressure gradient. Hopefully this will give a better result...

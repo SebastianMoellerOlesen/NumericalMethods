@@ -89,6 +89,20 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(raylib)
 
+# Is required on my machine, to get the execution policies to work.
+# std::execution::...
+set(TBB_TEST OFF CACHE BOOL "" FORCE)
+set(TBB_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(TBB_STRICT   OFF CACHE BOOL "" FORCE)
+
+FetchContent_Declare(
+    TBB
+    GIT_REPOSITORY "https://github.com/uxlfoundation/oneTBB.git"
+    GIT_TAG v2022.0.0
+)
+
+FetchContent_MakeAvailable(TBB)
+
 # ==================================
 #            ADD CODE
 # ==================================
