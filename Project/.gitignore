@@ -1,0 +1,15 @@
+# Build Folder
+build/
+
+# Cache
+.cache
+
+# Profiling with perf.
+perf.data*
+
+# Python Environment for the tools
+Tools/.venv
+*__pycache__
+
+# find_todos.py output
+Tools/todos_result.txt

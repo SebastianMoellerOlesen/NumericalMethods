@@ -1,0 +1,79 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 23,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "description": "Common settings for all builds",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "installDir": "${sourceDir}/install/${presetName}"
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug Build",
+      "description": "Debug symbols, no optimization",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release Build",
+      "description": "Fully optimized, no debug symbols",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON"
+      }
+    },
+    {
+      "name": "profile-perf",
+      "displayName": "Profile Build (perf/Callgrind)",
+      "description": "Optimized with debug symbols and frame pointers",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "OFF",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O3 -g -fno-omit-frame-pointer -DNDEBUG",
+        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O3 -g -fno-omit-frame-pointer -DNDEBUG"
+      }
+    },
+    {
+      "name": "windows-release",
+      "displayName": "Windows Release (MinGW)",
+      "description": "Cross-compile for Windows using MinGW",
+      "inherits": "base",
+      "toolchainFile": "${sourceDir}/Toolchain-mingw.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "OFF",
+        "CMAKE_EXE_LINKER_FLAGS": "-static"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "windows-release",
+      "configurePreset": "windows-release"
+    },
+    {
+      "name": "profile-perf",
+      "configurePreset": "profile-perf"
+    }
+  ]
+}

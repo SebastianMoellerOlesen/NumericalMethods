@@ -1,0 +1,148 @@
+BasedOnStyle: Microsoft
+
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+AccessModifierOffset: -4
+ContinuationIndentWidth: 4
+ConstructorInitializerIndentWidth: 4
+NamespaceIndentation: All
+IndentAccessModifiers: false
+IndentCaseLabels: true
+IndentCaseBlocks: false
+IndentExternBlock: AfterExternBlock
+IndentGotoLabels: true
+IndentPPDirectives: BeforeHash
+PPIndentWidth: -1
+IndentRequiresClause: true
+IndentWrappedFunctionNames: false
+LambdaBodyIndentation: Signature
+ColumnLimit: 0
+AlignAfterOpenBracket: Align
+AlignArrayOfStructures: None
+AlignConsecutiveAssignments:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: true
+  AlignCompound: true
+  PadOperators: true
+AlignConsecutiveDeclarations:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: true
+  AlignCompound: false
+  PadOperators: false
+AlignConsecutiveBitFields:
+  Enabled: false
+AlignConsecutiveMacros:
+  Enabled: false
+AlignEscapedNewlines: Left
+AlignOperands: AlignAfterOperator
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 0
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel: true
+  AfterClass: true
+  AfterControlStatement: Always
+  AfterEnum: true
+  AfterFunction: true
+  AfterNamespace: true
+  AfterStruct: true
+  AfterUnion: true
+  AfterExternBlock: true
+  BeforeCatch: true
+  BeforeElse: true
+  BeforeLambdaBody: false
+  BeforeWhile: true
+  IndentBraces: false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyNamespace: true
+InsertBraces: true
+RemoveBracesLLVM: false
+AllowShortBlocksOnASingleLine: Always
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortEnumsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: OnlyFirstIf
+AllowShortLambdasOnASingleLine: All
+AllowShortLoopsOnASingleLine: true
+AllowAllArgumentsOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
+AlwaysBreakAfterDefinitionReturnType: None
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: false
+AlwaysBreakTemplateDeclarations: No
+BinPackArguments: true
+BinPackParameters: true
+BreakAfterAttributes: Leave
+BreakArrays: true
+BreakBeforeBinaryOperators: None
+BreakBeforeConceptDeclarations: Always
+BreakBeforeInlineASMColon: OnlyMultiline
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializers: BeforeComma
+BreakInheritanceList: BeforeColon
+BreakStringLiterals: true
+PackConstructorInitializers: CurrentLine
+RequiresClausePosition: OwnLine
+RequiresExpressionIndentation: OuterScope
+SpacesInParentheses: true
+SpaceAfterCStyleCast: true
+SpaceAfterLogicalNot: false
+SpaceAfterTemplateKeyword: false
+SpaceAroundPointerQualifiers: Default
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCaseColon: false
+SpaceBeforeCpp11BracedList: false
+SpaceBeforeCtorInitializerColon: true
+SpaceBeforeInheritanceColon: true
+SpaceBeforeParens: ControlStatements
+SpaceBeforeParensOptions:
+  AfterControlStatements: true
+  AfterForeachMacros: true
+  AfterFunctionDeclarationName: false
+  AfterFunctionDefinitionName: false
+  AfterIfMacros: true
+  AfterOverloadedOperator: false
+  AfterRequiresInClause: false
+  AfterRequiresInExpression: false
+  BeforeNonEmptyParentheses: false
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceBeforeSquareBrackets: false
+SpaceInEmptyBlock: false
+SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 1
+SpacesInAngles: Never
+SpacesInCStyleCastParentheses: false
+SpacesInConditionalStatement: false
+SpacesInContainerLiterals: true
+SpacesInLineCommentPrefix:
+  Minimum: 1
+  Maximum: -1
+SpacesInSquareBrackets: false
+BitFieldColonSpacing: Both
+Cpp11BracedListStyle: true
+PointerAlignment: Left
+ReferenceAlignment: Pointer
+DerivePointerAlignment: false
+QualifierAlignment: Left
+SortIncludes: Never
+IncludeBlocks: Preserve
+SortUsingDeclarations: LexicographicNumeric
+CompactNamespaces: false
+DisableFormat: false
+EmptyLineAfterAccessModifier: Always
+EmptyLineBeforeAccessModifier: LogicalBlock
+FixNamespaceComments: true
+KeepEmptyLinesAtTheStartOfBlocks: true
+LineEnding: DeriveLF
+MaxEmptyLinesToKeep: 1
+ReflowComments: true
+RemoveSemicolon: true
+SeparateDefinitionBlocks: Leave
+ShortNamespaceLines: 1
+InsertNewlineAtEOF: true
+InsertTrailingCommas: None

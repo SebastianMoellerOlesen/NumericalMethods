@@ -1,0 +1,13 @@
+CompileFlags:
+  CompilationDatabase: build/release
+
+  Remove: 
+      - -fmodules-ts
+      - -fmodule-mapper=*
+      - -fdeps-format=*
+      
+Diagnostics:
+  MissingIncludes: Strict
+  UnusedIncludes: Strict
+  ClangTidy:
+    Add: [misc-include-cleaner]
