@@ -119,7 +119,7 @@ def sim_advanced(D: int, R: int, U: int, tau: float) -> tuple[int, int, int, flo
 def problem_d() -> None:
     D = 0
     R = 0
-    U = 50
+    U = 100
     tau = 0
 
     # We use a regular list, as it should be more performant, when we resize it.

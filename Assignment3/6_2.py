@@ -14,7 +14,7 @@ matplotlib.use("QtAgg")
 # Doing this, we just need to iterate using:
 # (1 + dt K_1) CO2^(n+1) = CO2^(n) + dt K_2 H2CO3
 # (1 + dt K_2) H2CO3^(n+1) = H2CO3^(n) + dt K_1 CO2
-def problem_a() -> None:
+def problem_a() -> tuple[np.ndarray, np.ndarray]:
 
     grid_count = 1000
     times = np.linspace(0, 20, 1000)
@@ -44,6 +44,8 @@ def problem_a() -> None:
     # We can debug, to see if the result is what we exected.
     print("The ratio of CO2 to H2CO3 is: ", CO2[-1] / H2CO3[-1])
 
+    return times, H2CO3
+
 
 @njit
 def react(CO2: int, H2CO3: int, tau: float) -> tuple[int, int, float]:
@@ -70,8 +72,10 @@ def react(CO2: int, H2CO3: int, tau: float) -> tuple[int, int, float]:
 
 def problem_b() -> None:
 
+    Analytical = problem_a()
+
     for N in np.array([1e3, 1e4, 1e5, 1e6]):
-        plt.figure()
+        plt.figure(figsize=(10, 10))
         plt.title(f"Gillespie method for N = {N}")
 
         for _ in range(5):
@@ -90,10 +94,18 @@ def problem_b() -> None:
             values = np.array(values)
             values = np.transpose(values)
 
-            plt.step(values[2], values[1], where="post", label=f"Run number {_}")
+            plt.step(values[2], values[1] / N, where="post", label=f"Run number {_}")
 
+        plt.errorbar(
+            Analytical[0],
+            Analytical[1],
+            fmt=".",
+            color="k",
+            label="H2CO3 Concentration FDM",
+        )
         plt.legend()
-        plt.show()
+
+    plt.show()
 
     return
 

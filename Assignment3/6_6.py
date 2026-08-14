@@ -75,7 +75,7 @@ def simulate_magnet() -> None:
     reshaped_grid = np.reshape(grid, (grid_size, grid_size))
     grid_elements = grid.size
 
-    sim_steps = 1000
+    sim_steps = 2000
     show_step = 20
 
     fig, ax = plt.subplots()
@@ -113,6 +113,7 @@ def simulate_magnet() -> None:
 
 @njit
 def sim_temps() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    print(" This might take a minute or two... ")
     grid_size = 100
     grid_elements = grid_size**2
     temps = np.linspace(0.1, 5, 100)
@@ -123,59 +124,32 @@ def sim_temps() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     abs_magnetisation = np.zeros((temps.size, int(iterations / 100)))
 
     for i, T in enumerate(temps):
-        # print(f"Simulating for T = {T:.2f}; {i} out of {len(temps)}")
-
         grid = init_grid(grid_size)
 
         for k in range(int(iterations // 100)):
-            print(k * 100)
             grid = update_grid(grid, 100, T, grid_size)
 
             energies[i, k] = calculate_H(grid, grid_size)
-            abs_magnetisation[i, k] = np.abs(np.average(grid))
+            abs_magnetisation[i, k] = np.abs(np.sum(grid))
 
     return temps, energies, abs_magnetisation
-
-    # plt.figure()
-    # plt.errorbar(temps, energies, fmt=".", label="Energies")
-    # plt.legend()
-
-    # plt.figure()
-    # plt.errorbar(temps, abs_magnetisation, fmt=".", label="Magnetisation")
-    # plt.legend()
-
-    # plt.show()
-
-
-def plot_temperatures_weird() -> None:
-    temps, energies, magnetisation = sim_temps()
-
-    fig, ax = plt.subplots(figsize=(6, 6))
-    ax.set_xlabel("Temperature (It is 0.1 -> 5.0)")
-    ax.set_ylabel("Iteration count (In 100 of iterations)")
-    im = ax.imshow(energies.transpose(), aspect="auto")
-    plt.show()
 
 
 def plot_temperatures() -> None:
     temps, energies, magnetisation = sim_temps()
 
     plt.figure()
-    plt.errorbar(temps, np.average(energies, axis = 1), fmt=".", label="Energies")
+    plt.errorbar(temps, np.average(energies, axis=1), fmt=".", label="Energies")
     plt.legend()
 
     plt.figure()
-    plt.errorbar(temps, np.average(energies, axis = 1), fmt=".", label="Magnetisation")
+    plt.errorbar(
+        temps, np.average(magnetisation, axis=1), fmt=".", label="Magnetisation"
+    )
     plt.legend()
 
     plt.show()
 
 
-# simulate_magnet()
-
-# There is absolutly NO WAY, this is what is intended??
-# I mean, why do we need to save the data every 100th step otherwise?
-# plot_temperatures_weird()
-
-# Just throw away the idx stuff...
+simulate_magnet()
 plot_temperatures()
