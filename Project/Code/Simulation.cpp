@@ -2,6 +2,7 @@
 #include "SmoothingKernals.hpp"
 #include "Utils.hpp"
 
+#include <ostream>
 #include <raylib.h>
 #include <raymath.h>
 #include <imgui.h>
@@ -129,6 +130,41 @@ void Simulation::Run() noexcept
     }
 }
 
+void Simulation::Restart() noexcept
+{
+    for ( uint32_t i = 0; i < m_ParticleCount; i++ )
+    {
+        // Position
+        float x        = GetRandomValue( 0.0f, m_RenderResolution );
+        float y        = GetRandomValue( 0.0f, m_RenderResolution );
+        m_Positions[i] = Vector2( x, y ) / m_RenderResolution * m_SimulationResolution;
+
+        //-------------------------------------------------------------------------
+
+        float dx = 0.0f;
+        float dy = 0.0f;
+
+        // Set a random velocity:
+        // float max = 5.0f;
+        // dx        = GetRandomValue( -max, max );
+        // dy        = GetRandomValue( -max, max );;
+
+        m_Velocities[i] = Vector2( dx, dy );
+
+        //-------------------------------------------------------------------------
+    }
+
+    // Initialize the fields.
+    m_Densities.resize( m_ParticleCount );
+    UpdateDensities();
+
+    m_Pressures.resize( m_ParticleCount );
+    UpdatePressures();
+
+    m_PressureGradiants.resize( m_ParticleCount );
+    UpdatePressureGradiant();
+}
+
 //-------------------------------------------------------------------------
 
 void Simulation::Update() noexcept
@@ -183,8 +219,8 @@ void Simulation::HandleBorderCollision() noexcept
             // If we are outside our box:
             if ( offset > 0 )
             {
-                pos += normal * offset;                           // Push into the inside of the box.
-                vel -= normal * Vector2DotProduct( vel, normal ); // Reflect the particle.
+                pos += normal * offset;                               // Push into the inside of the box.
+                vel -= normal * Vector2DotProduct( vel, normal ) * 2; // Reflect the particle.
             }
         }
     }
@@ -379,6 +415,11 @@ void Simulation::Render() noexcept
 
     ImGui::Begin( "Parameters" );
     ImGui::Checkbox( "Pause simulation", &m_Paused );
+
+    if ( ImGui::Button( " Restart Simulation ", ImVec2( 10, 10 ) ) )
+    {
+        Restart();
+    }
     ImGui::Separator();
     ImGui::SliderFloat( "Smoothing radius", &m_SmoothingRadius, 0.01f, 2.0f );
     ImGui::SliderFloat( "Pressure Multiplier", &m_PressureMultiplier, 0.0f, 10.0f );
