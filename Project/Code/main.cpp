@@ -4,6 +4,6 @@
 
 int main()
 {
-    Simulation sim{ 800, 600, 2000, 60, 3.0f };
+    Simulation sim{ 1000 };
     sim.Run();
 }

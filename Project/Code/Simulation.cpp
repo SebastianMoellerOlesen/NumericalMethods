@@ -1,86 +1,115 @@
 #include "Simulation.hpp"
 #include "SmoothingKernals.hpp"
-#include "Utils.hpp"
 
-#include <algorithm>
-#include <cstddef>
-#include <execution>
+#include <iostream>
 #include <raylib.h>
 #include <raymath.h>
+#include <imgui.h>
+#include <rlImGui.h>
+#include <rlgl.h>
+#include <imgui_impl_raylib.h>
 
+#include <limits>
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
+#include <execution>
+#include <unistd.h>
 #include <utility>
 #include <vector>
 
 //-------------------------------------------------------------------------
 
-Simulation::Simulation( uint32_t width, uint32_t height, uint32_t ballCount, uint32_t targetFPS, float ballRadius ) : m_DrawRadius( ballRadius ), m_ParticleCount( ballCount )
+Simulation::Simulation( uint32_t size )
 {
 
     //-------------------------------------------------------------------------
 
     SetConfigFlags( FLAG_WINDOW_HIGHDPI );
-    InitWindow( width, height, "Simulation" );
-    SetTargetFPS( targetFPS );
+    InitWindow( size, size, "Simulation" );
+    SetTargetFPS( m_TargetFPS );
+
+    BeginDrawing();
+    EndDrawing();
+
+    // Fixes mouse scaling for HighDPI displays?
+    // At least for my config. Milage may vary
+    SetMouseScale( 1.0f, 1.0f );
 
     //-------------------------------------------------------------------------
 
-    m_DeltaTime = 1.0f / targetFPS;
+    rlImGuiSetup( true );
 
     //-------------------------------------------------------------------------
 
-    // Due to DPI Scaling, we need to get the size of the window in logical pixels.
-    // Note: For some reason the scaling doesn't work, but the balls are still placed correctly.
-    // This might be due to how the FLAG_WINDOW_HIGHDPI works, but not sure...
-    // m_DPIScaling   = GetWindowScaleDPI();
-    m_RenderWidth  = width;  // * m_DPIScaling.x;
-    m_RenderHeight = height; // * m_DPIScaling.y;
+    m_RenderResolution = size;
 
     //-------------------------------------------------------------------------
 
-    // Assign the points for the border.
-    m_BorderP1.insert( m_BorderP1.begin(), { { 0, 0 }, { m_RenderWidth, 0 }, { m_RenderWidth, m_RenderHeight }, { 0, m_RenderHeight } } );
-    m_BorderP2.insert( m_BorderP2.begin(), { { m_RenderWidth, 0 }, { m_RenderWidth, m_RenderHeight }, { 0, m_RenderHeight }, { 0, 0 } } );
+    // Assign the points for the BC
+    m_BorderP1.insert( m_BorderP1.begin(), { { 0, 0 }, { m_SimulationResolution, 0 }, { m_SimulationResolution, m_SimulationResolution }, { 0, m_SimulationResolution } } );
+    m_BorderP2.insert( m_BorderP2.begin(), { { m_SimulationResolution, 0 }, { m_SimulationResolution, m_SimulationResolution }, { 0, m_SimulationResolution }, { 0, 0 } } );
+
+    //-------------------------------------------------------------------------
+
+    m_Masses = 1.0f;
 
     //-------------------------------------------------------------------------
 
     // Generate a random initial position.
-    for ( uint32_t i = 0; i < ballCount; i++ )
+    for ( uint32_t i = 0; i < m_ParticleCount; i++ )
     {
-
         // Position
-        float x = GetRandomValue( 0.0f, m_RenderWidth );
-        float y = GetRandomValue( 0.0f, m_RenderHeight );
-        // x = i % 100;
-        // y = float( i ) / 10;
-
-        m_Positions.push_back( Vector2( x, y ) );
+        float x = GetRandomValue( 0.0f, m_RenderResolution );
+        float y = GetRandomValue( 0.0f, m_RenderResolution );
+        m_Positions.push_back( Vector2( x, y ) / m_RenderResolution * m_SimulationResolution );
 
         //-------------------------------------------------------------------------
 
-        // Velocity
-        float max = 5.0f;
-        float dx  = GetRandomValue( -max, max );
-        float dy  = GetRandomValue( -max, max );
+        float dx = 0.0f;
+        float dy = 0.0f;
 
-        dx = 0;
-        dy = 0;
+        // Set a random velocity:
+        float max = 5.0f;
+        dx        = GetRandomValue( -max, max );
+        dy        = GetRandomValue( -max, max );
 
         m_Velocities.push_back( Vector2( dx, dy ) );
 
         //-------------------------------------------------------------------------
 
-        m_DensityGradients.resize( ballCount );
-        m_Densities.resize( ballCount );
+        m_ParticleColors.push_back( BLACK );
 
         //-------------------------------------------------------------------------
-
-        // Note: This might be usefull later.
-        m_Colors.push_back( BLACK );
-        m_Masses.push_back( 1.0f );
     }
 
-    //-------------------------------------------------------------------------
+    // Initialize the fields.
+    UpdateDensities();
+
+    // Create the debug texture:
+    m_DebugPixels.resize( m_DebugFieldResolution * m_DebugFieldResolution );
+
+    Image debugImg = {
+        .data    = m_DebugPixels.data(),
+        .width   = static_cast<int>( m_DebugFieldResolution ),
+        .height  = static_cast<int>( m_DebugFieldResolution ),
+        .mipmaps = 1,
+        .format  = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8 };
+
+    m_DebugTexture = LoadTextureFromImage( debugImg );
+    SetTextureFilter( m_DebugTexture, TEXTURE_FILTER_BILINEAR );
+}
+
+Simulation::~Simulation()
+{
+    UnloadTexture( m_DebugTexture );
+    rlImGuiShutdown();
+    CloseWindow();
+}
+
+Vector2 Simulation::WorldSpaceToScreenSpace( Vector2 WS ) noexcept
+{
+    return Vector2Scale( WS, m_RenderResolution / m_SimulationResolution );
 }
 
 //-------------------------------------------------------------------------
@@ -89,13 +118,9 @@ void Simulation::Run() noexcept
 {
     while ( !WindowShouldClose() )
     {
-        PollInputEvents();
-
         Update();
         Render();
     }
-
-    CloseWindow();
 }
 
 //-------------------------------------------------------------------------
@@ -109,20 +134,25 @@ void Simulation::Update() noexcept
     // Note: This is tested to me around 2x faster if flattening the vectors into regular floats.
     // Each iteration takes less than 1 micro second for 1000 particles, so might not be worth it.
     //-------------------------------------------------------------------------
+    // Note: It might also be viable to calculate it async, like we do with some of the others.
+    //-------------------------------------------------------------------------
+
+    if ( m_Paused )
+    {
+        return;
+    }
+
+    UpdateDensities();
+    // UpdatePressures();
+    // UpdatePressureGradiant();
 
     for ( uint32_t i = 0; i < m_Positions.size(); i++ )
     {
-        float density    = m_Densities[i] == 0 ? 1 : m_Densities[i];
-        m_Velocities[i] += m_DensityGradients[i] * m_DeltaTime * 500 / density;
-        m_Velocities[i] += Vector2( 0, 1 ) * m_DeltaTime;
-        m_Positions[i]  += m_Velocities[i] * m_DeltaTime;
+        m_Positions[i] += m_Velocities[i] * m_DeltaTime;
     }
 
     // Make sure the balls stay inside the box.
     HandleBorderCollision();
-
-    UpdateDensities();
-    UpdateDensityGradient();
 }
 
 //-------------------------------------------------------------------------
@@ -140,14 +170,14 @@ void Simulation::HandleBorderCollision() noexcept
             Vector2 P1 = m_BorderP1[k];
             Vector2 P2 = m_BorderP2[k];
 
-            if ( CheckCollisionCircleLine( m_Positions[i], m_DrawRadius, P1, P2 ) )
-            {
-                Vector2 normalLine  = Vector2Normalize( Vector2Rotate( P2 - P1, PI / 2 ) );
-                vel                -= Vector2Scale( normalLine, 2 * Vector2DotProduct( vel, normalLine ) );
+            Vector2 normal = Vector2Normalize( Vector2Rotate( P2 - P1, PI / 2 ) );
+            float   offset = Vector2DotProduct( normal, P1 - m_Positions[i] );
 
-                // Push out the circle:
-                float indent  = Vector2DotProduct( P1 - pos, normalLine );
-                pos          += Vector2Scale( normalLine, m_DrawRadius + indent );
+            // If we are outside our box:
+            if ( offset > 0 )
+            {
+                pos += normal * offset;                               // Push into the inside of the box.
+                vel -= normal * Vector2DotProduct( vel, normal ) * 2; // Reflect the particle.
             }
         }
     }
@@ -155,49 +185,18 @@ void Simulation::HandleBorderCollision() noexcept
 
 //-------------------------------------------------------------------------
 
-float Simulation::CalculateDensity( Vector2 location ) const noexcept
+float Simulation::CalculateDensity( Vector2 location ) noexcept
 {
     float density = 0;
 
     for ( uint32_t i = 0; i < m_ParticleCount; i++ )
     {
         float distance   = Vector2Length( location - m_Positions[i] );
-        float influence  = SimpleSmoothingKernal2D( m_InfluenceRadius, distance );
-        density         += m_Masses[i] * influence;
+        float influence  = SimpleSmoothingKernal2D( m_SmoothingRadius, distance );
+        density         += m_Masses * influence;
     }
 
     return density;
-}
-
-//-------------------------------------------------------------------------
-
-Vector2 Simulation::CalculateDensityGradiant( Vector2 location ) const noexcept
-{
-    Vector2 gradiant = Vector2Zero();
-
-    for ( uint32_t i = 0; i < m_ParticleCount; i++ )
-    {
-        Vector2 difference = location - m_Positions[i];
-
-        float distance  = Vector2Length( difference );
-        float influence = SimpleSmoothingKernal2D( m_InfluenceRadius, distance );
-
-        gradiant += Vector2Normalize( difference ) * m_Masses[i] * influence;
-
-        if ( IsMouseButtonDown( MOUSE_BUTTON_LEFT ) )
-        {
-            difference = location - GetMousePosScaled();
-            distance   = Vector2Length( difference );
-
-            float threshold = 200;
-            if ( distance < threshold )
-            {
-                gradiant -= Vector2Normalize( difference ) * 1.0f * m_Masses[i] * influence * distance / threshold;
-            }
-        }
-    }
-
-    return gradiant;
 }
 
 //-------------------------------------------------------------------------
@@ -234,41 +233,69 @@ void Simulation::UpdateDensities() noexcept
     //-------------------------------------------------------------------------
 }
 
-void Simulation::UpdateDensityGradient() noexcept
+//-------------------------------------------------------------------------
+
+float Simulation::CalculatePressure( Vector2 location ) noexcept
 {
-
-    //-------------------------------------------------------------------------
-
-    // Explicit update.
-    // Density^(n+1) = F(Density^(n), Position^(n))
-    // Mabey, we should use some other method for better stability.
-
-    //-------------------------------------------------------------------------
-
-    std::vector<Vector2> newGradiants;
-    newGradiants.reserve( m_ParticleCount );
-
-    //-------------------------------------------------------------------------
-
-    std::for_each( std::execution::par_unseq, m_Positions.begin(), m_Positions.end(),
-                   [this, &newGradiants]( const Vector2& pos ) {
-                       size_t i        = &pos - m_Positions.data();
-                       newGradiants[i] = this->CalculateDensityGradiant( pos );
-                   } );
-
-    //-------------------------------------------------------------------------
-
-    // Mabey this is not the best approach.
-    // We might wan't to store both the old and the new for some reason.
-    // It should be easy to implement though...
-    m_DensityGradients = std::move( newGradiants );
-
-    //-------------------------------------------------------------------------
+    float difference = CalculateDensity( location ) - m_TargetDensity;
+    return difference * m_PressureMultiplier;
 }
 
 //-------------------------------------------------------------------------
 
-void Simulation::Render() const noexcept
+void Simulation::UpdatePressures() noexcept
+{
+    // No need to update them all at once, since we don't use the pressures, but the densities to calculate the pressure.
+    std::for_each( std::execution::par_unseq, m_Pressures.begin(), m_Pressures.end(),
+                   [this]( float& pressure ) {
+                       size_t i          = &pressure - m_Pressures.data();
+                       float  difference = this->m_Densities[i] - this->m_TargetDensity;
+                       pressure          = difference * m_PressureMultiplier;
+                   } );
+}
+
+void Simulation::UpdatePressureGradiant() noexcept
+{
+    std::for_each( std::execution::par_unseq, m_Positions.begin(), m_Positions.end(), [this]( const Vector2& pos ) {
+        size_t i                     = &pos - m_Positions.data();
+        this->m_PressureGradiants[i] = this->CalculatePressureGradiant( pos );
+    } );
+}
+
+Vector2 Simulation ::CalculatePressureGradiant( Vector2 location ) noexcept
+{
+    // There is some bug, that causes all the particles to move towars a cornor...
+    Vector2 gradient = Vector2Zero();
+
+    for ( uint32_t i = 0; i < m_ParticleCount; i++ )
+    {
+        Vector2 difference = location - m_Positions[i];
+        float   distance   = Vector2Length( difference );
+
+        // As it is currently, we apply a gradient from the particle itself.
+        // It should take the index instead of the location.
+        // It should still react to the pressure gradient from other particles, with potentially the same position...
+        if ( distance == 0 )
+        {
+            float R1 = static_cast<float>( GetRandomValue( std::numeric_limits<int>::min(), std::numeric_limits<int>::max() ) / static_cast<float>( std::numeric_limits<int>::max() ) );
+            float R2 = static_cast<float>( GetRandomValue( std::numeric_limits<int>::min(), std::numeric_limits<int>::max() ) / static_cast<float>( std::numeric_limits<int>::max() ) );
+
+            // The lenght means  that it is most likely just 0. Use the original difference, for just 0, as we are only here if len(difference) = 0...
+            // Just used for direction...
+            // Unlikely to be 0,0 so crossing fingers...
+            difference = Vector2Normalize( { R1, R2 } );
+        }
+
+        float influence  = SimpleSmoothingKernal2D( m_SmoothingRadius, distance );
+        gradient        += Vector2Normalize( difference ) * m_Masses * influence * m_Pressures[i] / m_Densities[i];
+    }
+
+    return gradient;
+}
+
+//-------------------------------------------------------------------------
+
+void Simulation::Render() noexcept
 {
 
     //-------------------------------------------------------------------------
@@ -278,22 +305,123 @@ void Simulation::Render() const noexcept
     //-------------------------------------------------------------------------
 
     ClearBackground( RAYWHITE );
+    DrawPressure();
 
     //-------------------------------------------------------------------------
 
     for ( uint32_t i = 0; i < m_BorderP1.size(); i++ )
     {
-        DrawLineEx( m_BorderP1[i], m_BorderP2[i], 3.0f, BLACK );
+        DrawLineEx( WorldSpaceToScreenSpace( m_BorderP1[i] ), WorldSpaceToScreenSpace( m_BorderP2[i] ), 3.0f, BLACK );
     }
 
     //-------------------------------------------------------------------------
 
     for ( uint32_t i = 0; i < m_Positions.size(); i++ )
     {
-        DrawCircleV( m_Positions[i], m_DrawRadius, m_Colors[i] );
+        DrawCircleV( WorldSpaceToScreenSpace( m_Positions[i] ), m_ParticleDrawRadius, m_ParticleColors[i] );
     }
 
     //-------------------------------------------------------------------------
 
+    rlImGuiBegin();
+
+    ImGui::Begin( "Parameters" );
+    ImGui::Checkbox( "Pause simulation", &m_Paused );
+    ImGui::Separator();
+    ImGui::SliderFloat( "Smoothing radius", &m_SmoothingRadius, 0.01f, 2.0f );
+    ImGui::Separator();
+    ImGui::SliderFloat( "Debug field max", &m_DebugFieldMax, 0.0f, 50.0f );
+    ImGui::SliderFloat( "Debug field min", &m_DebugFieldMin, -50.0f, 0.0f );
+    ImGui::SliderFloat( "Debug field middle", &m_DebugFieldMiddle, m_DebugFieldMin, m_DebugFieldMax );
+    ImGui::Text( "%.1f FPS", static_cast<double>( GetFPS() ) );
+    ImGui::End();
+
+    rlImGuiEnd();
+
+    //-------------------------------------------------------------------------
+
     EndDrawing();
+}
+
+//-------------------------------------------------------------------------
+
+void Simulation::DrawDensity() noexcept
+{
+
+    // How does each pixel location map to the world?
+    float cellToWorld = m_SimulationResolution / m_DebugFieldResolution;
+
+    std::for_each( std::execution::par_unseq, m_DebugPixels.begin(), m_DebugPixels.end(),
+                   [this, cellToWorld]( Color& pixel ) {
+                       //-------------------------------------------------------------------------
+
+                       // Get the row and column for the current idx.
+                       size_t i   = &pixel - this->m_DebugPixels.data();
+                       size_t col = i % this->m_DebugFieldResolution;
+                       size_t row = i / this->m_DebugFieldResolution;
+
+                       //-------------------------------------------------------------------------
+
+                       Vector2 world   = { ( col + 0.5f ) * cellToWorld, ( row + 0.5f ) * cellToWorld };
+                       float   density = this->CalculateDensity( world );
+
+                       //-------------------------------------------------------------------------
+
+                       // Map the density to the color.
+                       float t = ( density - this->m_DebugFieldMin ) / ( this->m_DebugFieldMax - this->m_DebugFieldMin );
+                       pixel   = ColorLerp( this->m_DebugMinColor, this->m_DebugMaxColor, t );
+
+                       //-------------------------------------------------------------------------
+                   } );
+
+    // Update the texture data, and draw it.
+    UpdateTexture( m_DebugTexture, m_DebugPixels.data() );
+
+    DrawTexturePro( m_DebugTexture, { 0, 0, static_cast<float>( m_DebugFieldResolution ), static_cast<float>( m_DebugFieldResolution ) },
+                    { 0, 0, static_cast<float>( m_RenderResolution ), static_cast<float>( m_RenderResolution ) }, { 0, 0 }, 0, WHITE );
+}
+
+void Simulation::DrawPressure() noexcept
+{
+
+    // How does each pixel location map to the world?
+    float cellToWorld = m_SimulationResolution / m_DebugFieldResolution;
+
+    std::for_each( std::execution::par_unseq, m_DebugPixels.begin(), m_DebugPixels.end(),
+                   [this, cellToWorld]( Color& pixel ) {
+                       //-------------------------------------------------------------------------
+
+                       // Get the row and column for the current idx.
+                       size_t i   = &pixel - this->m_DebugPixels.data();
+                       size_t col = i % this->m_DebugFieldResolution;
+                       size_t row = i / this->m_DebugFieldResolution;
+
+                       //-------------------------------------------------------------------------
+
+                       Vector2 world    = { ( col + 0.5f ) * cellToWorld, ( row + 0.5f ) * cellToWorld };
+                       float   pressure = this->CalculatePressure( world );
+
+                       //-------------------------------------------------------------------------
+
+                       // Map the density to the color.
+
+                       if ( pressure < m_DebugFieldMiddle )
+                       {
+                           float t = ( pressure - this->m_DebugFieldMin ) / ( this->m_DebugFieldMiddle - this->m_DebugFieldMin );
+                           pixel   = ColorLerp( this->m_DebugMinColor, this->m_DebugMiddleColor, t );
+                       }
+                       else
+                       {
+                           float t = ( pressure - this->m_DebugFieldMiddle ) / ( this->m_DebugFieldMax - this->m_DebugFieldMiddle );
+                           pixel   = ColorLerp( this->m_DebugMiddleColor, this->m_DebugMaxColor, t );
+                       }
+
+                       //-------------------------------------------------------------------------
+                   } );
+
+    // Update the texture data, and draw it.
+    UpdateTexture( m_DebugTexture, m_DebugPixels.data() );
+
+    DrawTexturePro( m_DebugTexture, { 0, 0, static_cast<float>( m_DebugFieldResolution ), static_cast<float>( m_DebugFieldResolution ) },
+                    { 0, 0, static_cast<float>( m_RenderResolution ), static_cast<float>( m_RenderResolution ) }, { 0, 0 }, 0, WHITE );
 }

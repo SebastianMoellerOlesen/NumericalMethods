@@ -15,4 +15,4 @@ target_sources(Project PUBLIC
 )
 
 target_include_directories(Project PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(Project PRIVATE raylib TBB::tbb)
+target_link_libraries(Project PRIVATE raylib TBB::tbb ImGuiRaylib)
