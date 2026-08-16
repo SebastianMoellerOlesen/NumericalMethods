@@ -7,6 +7,8 @@ set(SOURCES
 
 set(HEADERS
   Simulation.hpp
+  SmoothingKernals.hpp
+  Utils.hpp
 )
 
 target_sources(Project PUBLIC

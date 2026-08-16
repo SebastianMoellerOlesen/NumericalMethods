@@ -1,7 +1,7 @@
 #include "Simulation.hpp"
 #include "SmoothingKernals.hpp"
+#include "Utils.hpp"
 
-#include <iostream>
 #include <raylib.h>
 #include <raymath.h>
 #include <imgui.h>
@@ -9,7 +9,6 @@
 #include <rlgl.h>
 #include <imgui_impl_raylib.h>
 
-#include <limits>
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -70,9 +69,9 @@ Simulation::Simulation( uint32_t size )
         float dy = 0.0f;
 
         // Set a random velocity:
-        float max = 5.0f;
-        dx        = GetRandomValue( -max, max );
-        dy        = GetRandomValue( -max, max );
+        // float max = 5.0f;
+        // dx        = GetRandomValue( -max, max );
+        // dy        = GetRandomValue( -max, max );;
 
         m_Velocities.push_back( Vector2( dx, dy ) );
 
@@ -84,7 +83,14 @@ Simulation::Simulation( uint32_t size )
     }
 
     // Initialize the fields.
+    m_Densities.resize( m_ParticleCount );
     UpdateDensities();
+
+    m_Pressures.resize( m_ParticleCount );
+    UpdatePressures();
+
+    m_PressureGradiants.resize( m_ParticleCount );
+    UpdatePressureGradiant();
 
     // Create the debug texture:
     m_DebugPixels.resize( m_DebugFieldResolution * m_DebugFieldResolution );
@@ -143,12 +149,13 @@ void Simulation::Update() noexcept
     }
 
     UpdateDensities();
-    // UpdatePressures();
-    // UpdatePressureGradiant();
+    UpdatePressures();
+    UpdatePressureGradiant();
 
     for ( uint32_t i = 0; i < m_Positions.size(); i++ )
     {
-        m_Positions[i] += m_Velocities[i] * m_DeltaTime;
+        m_Velocities[i] += m_PressureGradiants[i] / m_Densities[i] * m_DeltaTime;
+        m_Positions[i]  += m_Velocities[i] * m_DeltaTime;
     }
 
     // Make sure the balls stay inside the box.
@@ -176,8 +183,8 @@ void Simulation::HandleBorderCollision() noexcept
             // If we are outside our box:
             if ( offset > 0 )
             {
-                pos += normal * offset;                               // Push into the inside of the box.
-                vel -= normal * Vector2DotProduct( vel, normal ) * 2; // Reflect the particle.
+                pos += normal * offset;                           // Push into the inside of the box.
+                vel -= normal * Vector2DotProduct( vel, normal ); // Reflect the particle.
             }
         }
     }
@@ -241,6 +248,12 @@ float Simulation::CalculatePressure( Vector2 location ) noexcept
     return difference * m_PressureMultiplier;
 }
 
+float Simulation::CalculatePressure( uint32_t index ) noexcept
+{
+    float difference = m_Densities[index] - m_TargetDensity;
+    return difference * m_PressureMultiplier;
+}
+
 //-------------------------------------------------------------------------
 
 void Simulation::UpdatePressures() noexcept
@@ -248,9 +261,8 @@ void Simulation::UpdatePressures() noexcept
     // No need to update them all at once, since we don't use the pressures, but the densities to calculate the pressure.
     std::for_each( std::execution::par_unseq, m_Pressures.begin(), m_Pressures.end(),
                    [this]( float& pressure ) {
-                       size_t i          = &pressure - m_Pressures.data();
-                       float  difference = this->m_Densities[i] - this->m_TargetDensity;
-                       pressure          = difference * m_PressureMultiplier;
+                       size_t i = &pressure - m_Pressures.data();
+                       pressure = CalculatePressure( i );
                    } );
 }
 
@@ -258,13 +270,12 @@ void Simulation::UpdatePressureGradiant() noexcept
 {
     std::for_each( std::execution::par_unseq, m_Positions.begin(), m_Positions.end(), [this]( const Vector2& pos ) {
         size_t i                     = &pos - m_Positions.data();
-        this->m_PressureGradiants[i] = this->CalculatePressureGradiant( pos );
+        this->m_PressureGradiants[i] = this->CalculatePressureGradiant( i );
     } );
 }
 
 Vector2 Simulation ::CalculatePressureGradiant( Vector2 location ) noexcept
 {
-    // There is some bug, that causes all the particles to move towars a cornor...
     Vector2 gradient = Vector2Zero();
 
     for ( uint32_t i = 0; i < m_ParticleCount; i++ )
@@ -277,13 +288,8 @@ Vector2 Simulation ::CalculatePressureGradiant( Vector2 location ) noexcept
         // It should still react to the pressure gradient from other particles, with potentially the same position...
         if ( distance == 0 )
         {
-            float R1 = static_cast<float>( GetRandomValue( std::numeric_limits<int>::min(), std::numeric_limits<int>::max() ) / static_cast<float>( std::numeric_limits<int>::max() ) );
-            float R2 = static_cast<float>( GetRandomValue( std::numeric_limits<int>::min(), std::numeric_limits<int>::max() ) / static_cast<float>( std::numeric_limits<int>::max() ) );
-
-            // The lenght means  that it is most likely just 0. Use the original difference, for just 0, as we are only here if len(difference) = 0...
-            // Just used for direction...
-            // Unlikely to be 0,0 so crossing fingers...
-            difference = Vector2Normalize( { R1, R2 } );
+            // The GetRandomDir() returns a normalized vector, so no need to normalize.
+            difference = GetRandomDir();
         }
 
         float influence  = SimpleSmoothingKernal2D( m_SmoothingRadius, distance );
@@ -291,6 +297,52 @@ Vector2 Simulation ::CalculatePressureGradiant( Vector2 location ) noexcept
     }
 
     return gradient;
+}
+
+Vector2 Simulation::CalculatePressureGradiant( uint32_t index ) noexcept
+{
+    //-------------------------------------------------------------------------
+
+    Vector2 gradient = Vector2Zero();
+
+    //-------------------------------------------------------------------------
+
+    for ( uint32_t i = 0; i < m_ParticleCount; i++ )
+    {
+
+        //-------------------------------------------------------------------------
+
+        if ( i == index )
+        {
+            continue;
+        }
+
+        //-------------------------------------------------------------------------
+
+        Vector2 difference = m_Positions[index] - m_Positions[i];
+        float   distance   = Vector2Length( difference );
+
+        //-------------------------------------------------------------------------
+
+        if ( distance == 0 )
+        {
+            // The GetRandomDir() returns a normalized vector, so no need to normalize.
+            difference = GetRandomDir();
+        }
+
+        //-------------------------------------------------------------------------
+
+        float influence  = SimpleSmoothingKernal2D( m_SmoothingRadius, distance );
+        gradient        += Vector2Normalize( difference ) * m_Masses * influence * m_Pressures[i] / m_Densities[i];
+
+        //-------------------------------------------------------------------------
+    }
+
+    //-------------------------------------------------------------------------
+
+    return gradient;
+
+    //-------------------------------------------------------------------------
 }
 
 //-------------------------------------------------------------------------
@@ -329,6 +381,8 @@ void Simulation::Render() noexcept
     ImGui::Checkbox( "Pause simulation", &m_Paused );
     ImGui::Separator();
     ImGui::SliderFloat( "Smoothing radius", &m_SmoothingRadius, 0.01f, 2.0f );
+    ImGui::SliderFloat( "Pressure Multiplier", &m_PressureMultiplier, 0.0f, 10.0f );
+    ImGui::SliderFloat( "Target Density", &m_TargetDensity, 0.0f, 20.0f );
     ImGui::Separator();
     ImGui::SliderFloat( "Debug field max", &m_DebugFieldMax, 0.0f, 50.0f );
     ImGui::SliderFloat( "Debug field min", &m_DebugFieldMin, -50.0f, 0.0f );
@@ -368,8 +422,8 @@ void Simulation::DrawDensity() noexcept
                        //-------------------------------------------------------------------------
 
                        // Map the density to the color.
-                       float t = ( density - this->m_DebugFieldMin ) / ( this->m_DebugFieldMax - this->m_DebugFieldMin );
-                       pixel   = ColorLerp( this->m_DebugMinColor, this->m_DebugMaxColor, t );
+                       float t = ( density - this->m_DebugFieldMiddle ) / ( this->m_DebugFieldMax - this->m_DebugFieldMiddle );
+                       pixel   = ColorLerp( this->m_DebugMiddleColor, this->m_DebugMaxColor, t );
 
                        //-------------------------------------------------------------------------
                    } );

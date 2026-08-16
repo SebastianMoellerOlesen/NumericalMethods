@@ -7,7 +7,7 @@
 // The integral is equal to one
 constexpr inline float SimpleSmoothingKernal2D( float radius, float distance )
 {
-    float smoothingValue        = radius - distance;
+    float smoothingValue        = radius * radius - distance * distance;
     float normalizationConstant = radius * radius * radius * PI / 3.0f;
     return smoothingValue > 0 ? smoothingValue / normalizationConstant : 0;
 }

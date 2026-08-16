@@ -40,9 +40,6 @@ private:
     Vector2 WorldSpaceToScreenSpace( Vector2 WS ) noexcept;
     float   WorldSpaceToSCreenSpace( float WS ) noexcept;
 
-    Vector2 GetRandomDir();
-    Vector2 GetRandomFloat( float min, float max ) noexcept;
-
     float CalculateDensity( Vector2 location ) noexcept; // Includes all particles.
     float CalculateDensity( uint32_t index ) noexcept;   // Uses the position for the local index. This one includes all particles, include the particle itself.
 
