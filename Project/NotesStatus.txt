@@ -22,3 +22,7 @@ And the bonus is i only have to calulate it once during each frame, instead of p
 FPS before is roughly 300 for 2k particles.
 The FPS after is roughly 2900, for the same 2k particles.
 The behaviour seems to be the same aswell.
+
+I feel like i am in a good place RN, the next thing should be to add more of the forces into the simulation.
+After that, i might be fun to implement the RK4 method, and see how it compares.
+Then make some fun demoes i suppose!

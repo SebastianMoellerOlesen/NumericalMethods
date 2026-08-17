@@ -689,8 +689,10 @@ void Simulation::Render() noexcept
 
         for ( uint32_t i = 0; i < m_Positions.size(); i++ )
         {
+            Color circleColor = m_ParticleColors[i];
+            if ( m_DebugSettings.DrawSpeedColor ) { circleColor = ColorLerp( BLUE, RED, Vector2Length( m_Velocities[i] ) / m_DebugSettings.MaxSpeed ); }
             DrawCircleV( WorldSpaceToScreenSpace( m_Positions[i] ), m_DebugSettings.ParticleDrawRadius + 1.0f, BLACK );
-            DrawCircleV( WorldSpaceToScreenSpace( m_Positions[i] ), m_DebugSettings.ParticleDrawRadius, m_ParticleColors[i] );
+            DrawCircleV( WorldSpaceToScreenSpace( m_Positions[i] ), m_DebugSettings.ParticleDrawRadius, circleColor );
         }
     }
 
@@ -837,6 +839,8 @@ void Simulation::DrawPhysicsOverlay() noexcept
     if ( m_PhysicsSettings.ApplyPressureForce ) { ImGui::InputFloat( "Pressure Multiplier", &m_PhysicsSettings.PressureMultiplier, 0.1f, 1.0f ); }
     if ( m_PhysicsSettings.ApplyGravity ) { ImGui::InputFloat( "Gravity Multiplier", &m_PhysicsSettings.GravityMultiplier, 0.01f, 0.1f ); }
 
+    //-------------------------------------------------------------------------
+
     ImGui::End();
 }
 
@@ -847,7 +851,10 @@ void Simulation::DrawDebugOverlay() noexcept
 
     ImGui::Text( "Ball drawing" );
     ImGui::Checkbox( " Draw Balls ", &m_DebugSettings.Draw );
+    ImGui::SameLine();
+    ImGui::Checkbox( " Speed = Colors ", &m_DebugSettings.DrawSpeedColor );
     if ( m_DebugSettings.Draw ) { ImGui::SliderFloat( "Ball radius", &m_DebugSettings.ParticleDrawRadius, 0.0f, 10.0f ); }
+    if ( m_DebugSettings.DrawSpeedColor ) { ImGui::SliderFloat( "Speed color cap", &m_DebugSettings.MaxSpeed, 0.0f, 10.0f ); }
 
     ImGui::Separator();
     ImGui::Text( "Debug Texture Mode" );

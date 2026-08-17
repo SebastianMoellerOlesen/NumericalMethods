@@ -69,6 +69,9 @@ struct DebugSettings
     bool       Draw{ true };
     DebugField Field{ DebugField::None };
 
+    bool  DrawSpeedColor{ true };
+    float MaxSpeed{ 1.0f };
+
     //-------------------------------------------------------------------------
 
     // This is the size of a texture, we generate to project the different fields for debug.
