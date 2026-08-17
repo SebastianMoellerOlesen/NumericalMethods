@@ -36,7 +36,12 @@ struct PhysicsSettings
     float TargetDensity{ ParticleCount / SimulationResolution / SimulationResolution / 1.3f };
     float SmoothingRadius{ 2 * std::sqrt( SimulationResolution * SimulationResolution / ( ParticleCount ) ) };
 
-    bool  ApplyPressureForce{ true };
+    bool ApplyPressureForce{ true };
+
+    // This is directly linked to the speed of sound in the fluid.
+    // c^2 = PressureMultiplier, which is due to the way we calculate the pressure.
+    // see: https://en.wikipedia.org/wiki/Speed_of_sound
+
     float PressureMultiplier{ 10000.0f / ParticleCount };
 
     bool  ApplyGravity{ false };
