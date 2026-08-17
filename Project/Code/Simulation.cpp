@@ -28,7 +28,7 @@ Simulation::Simulation( uint32_t size )
 
     SetConfigFlags( FLAG_WINDOW_HIGHDPI );
     InitWindow( size, size, "Simulation" );
-    // SetTargetFPS( m_PhysicsSettings.TargetFPS ); // Debatable if it should be in the physics settings...
+    SetTargetFPS( m_PhysicsSettings.TargetFPS ); // Debatable if it should be in the physics settings...
 
     BeginDrawing();
     EndDrawing();
@@ -369,6 +369,22 @@ void Simulation::ImplicitUpdate() noexcept
         }
     }
 
+    // For testing...
+    if ( IsMouseButtonDown( MOUSE_LEFT_BUTTON ) || IsMouseButtonDown( MOUSE_RIGHT_BUTTON ) )
+    {
+        float   multiplier = IsMouseButtonDown( MOUSE_LEFT_BUTTON ) ? 1.0f : -1.0f;
+        Vector2 worldPos   = GetMousePosition() / m_DebugSettings.RenderResolution * m_PhysicsSettings.SimulationResolution;
+
+        for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+        {
+            Vector2 difference = worldPos - m_Positions[i];
+            float   distance   = Vector2Length( difference );
+            float   weight     = SimpleSmoothingKernal2D( 2.0f, distance );
+
+            m_Velocities[i] += difference / distance * weight * multiplier * m_PhysicsSettings.PressureMultiplier / m_Densities[i];
+        }
+    }
+
     for ( uint32_t i = 0; i < m_Positions.size(); i++ )
     {
         m_Positions[i] += m_Velocities[i] * m_PhysicsSettings.DeltaTime;
@@ -673,7 +689,7 @@ void Simulation::Render() noexcept
 
         for ( uint32_t i = 0; i < m_Positions.size(); i++ )
         {
-            DrawCircleV( WorldSpaceToScreenSpace( m_Positions[i] ), m_DebugSettings.ParticleDrawRadius + 0.5f, BLACK );
+            DrawCircleV( WorldSpaceToScreenSpace( m_Positions[i] ), m_DebugSettings.ParticleDrawRadius + 1.0f, BLACK );
             DrawCircleV( WorldSpaceToScreenSpace( m_Positions[i] ), m_DebugSettings.ParticleDrawRadius, m_ParticleColors[i] );
         }
     }
