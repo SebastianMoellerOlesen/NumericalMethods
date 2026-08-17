@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <raylib.h>
 
 #include <cstdint>
@@ -90,13 +91,13 @@ private:
 
     // Simulation size stuff
     float    m_SimulationResolution{ 10.0f }; // X and Y are same scale...
-    uint32_t m_ParticleCount{ 3000 };
+    uint32_t m_ParticleCount{ 4000 };
 
     // Particle param stuff
     float m_Masses{ 1.0f };
-    float m_TargetDensity{ m_ParticleCount / m_SimulationResolution / m_SimulationResolution / 1.3f }; // Trial and error.
-    float m_SmoothingRadius{ 0.3f };                                                                   // Should be calculated based on the initial parameters...
-    float m_PressureMultiplier{ 3.0f };
+    float m_TargetDensity{ m_ParticleCount / m_SimulationResolution / m_SimulationResolution / 1.3f };                 // Trial and error.
+    float m_SmoothingRadius{ 2 * std::sqrt( m_SimulationResolution * m_SimulationResolution / ( m_ParticleCount ) ) }; // Trial and error.
+    float m_PressureMultiplier{ 10000.0f / m_ParticleCount };
 
     UpdateScheme m_UpdateScheme{ UpdateScheme::Implicit };
     bool         m_Paused{ true };
