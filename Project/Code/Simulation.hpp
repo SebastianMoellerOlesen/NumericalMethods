@@ -35,7 +35,12 @@ struct PhysicsSettings
 
     float TargetDensity{ ParticleCount / SimulationResolution / SimulationResolution / 1.3f };
     float SmoothingRadius{ 2 * std::sqrt( SimulationResolution * SimulationResolution / ( ParticleCount ) ) };
+
+    bool  ApplyPressureForce{ true };
     float PressureMultiplier{ 10000.0f / ParticleCount };
+
+    bool  ApplyGravity{ false };
+    float GravityMultiplier{ 0.0f };
 
     //-------------------------------------------------------------------------
 };

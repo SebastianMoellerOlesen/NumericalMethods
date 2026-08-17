@@ -77,7 +77,7 @@ Simulation::Simulation( uint32_t size )
 
         //-------------------------------------------------------------------------
 
-        m_ParticleColors.push_back( BLACK );
+        m_ParticleColors.push_back( BLUE );
 
         //-------------------------------------------------------------------------
     }
@@ -203,6 +203,7 @@ void Simulation::ImplicitUpdate() noexcept
 
     for ( uint32_t i = 0; i < m_Positions.size(); i++ )
     {
+        // Precict positions.
         m_Positions[i] += m_Velocities[i] * m_PhysicsSettings.DeltaTime;
     }
 
@@ -220,10 +221,25 @@ void Simulation::ImplicitUpdate() noexcept
 
     //-------------------------------------------------------------------------
 
+    if ( m_PhysicsSettings.ApplyPressureForce )
+    {
+        for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+        {
+            m_Velocities[i] += m_PressureGradiants[i] / m_Densities[i] * m_PhysicsSettings.DeltaTime;
+        }
+    }
+
+    if ( m_PhysicsSettings.ApplyGravity )
+    {
+        for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+        {
+            m_Velocities[i] += Vector2( 0.0f, 1.0f ) * m_PhysicsSettings.GravityMultiplier * m_PhysicsSettings.DeltaTime;
+        }
+    }
+
     for ( uint32_t i = 0; i < m_Positions.size(); i++ )
     {
-        m_Velocities[i] += m_PressureGradiants[i] / m_Densities[i] * m_PhysicsSettings.DeltaTime;
-        m_Positions[i]  += m_Velocities[i] * m_PhysicsSettings.DeltaTime;
+        m_Positions[i] += m_Velocities[i] * m_PhysicsSettings.DeltaTime;
     }
 
     //-------------------------------------------------------------------------
@@ -244,10 +260,25 @@ void Simulation::ExplicitUpdate() noexcept
 
     //-------------------------------------------------------------------------
 
+    if ( m_PhysicsSettings.ApplyPressureForce )
+    {
+        for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+        {
+            m_Velocities[i] += m_PressureGradiants[i] / m_Densities[i] * m_PhysicsSettings.DeltaTime;
+        }
+    }
+
+    if ( m_PhysicsSettings.ApplyGravity )
+    {
+        for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+        {
+            m_Velocities[i] += Vector2( 0.0f, 1.0f ) * m_PhysicsSettings.GravityMultiplier * m_PhysicsSettings.DeltaTime;
+        }
+    }
+
     for ( uint32_t i = 0; i < m_Positions.size(); i++ )
     {
-        m_Velocities[i] += m_PressureGradiants[i] / m_Densities[i] * m_PhysicsSettings.DeltaTime;
-        m_Positions[i]  += m_Velocities[i] * m_PhysicsSettings.DeltaTime;
+        m_Positions[i] += m_Velocities[i] * m_PhysicsSettings.DeltaTime;
     }
 
     //-------------------------------------------------------------------------
@@ -278,8 +309,8 @@ void Simulation::HandleBorderCollision() noexcept
             // If we are outside our box:
             if ( offset > 0 )
             {
-                pos += normal * offset;                               // Push into the inside of the box.
-                vel -= normal * Vector2DotProduct( vel, normal ) * 2; // Reflect the particle.
+                pos += normal * offset;                                  // Reflect the travel
+                vel -= normal * Vector2DotProduct( vel, normal ) * 1.15; // Reflect the particle.
             }
         }
     }
@@ -387,7 +418,7 @@ Vector2 Simulation ::CalculatePressureGradiant( Vector2 location ) noexcept
             difference = GetRandomDir();
         }
 
-        float influence  = SimpleSmoothingKernal2D( m_PhysicsSettings.SmoothingRadius, distance );
+        float influence  = SimpleSmoothinKernalDerivative2D( m_PhysicsSettings.SmoothingRadius, distance );
         gradient        += Vector2Normalize( difference ) * m_Masses * influence * m_Pressures[i] / m_Densities[i];
     }
 
@@ -427,9 +458,9 @@ Vector2 Simulation::CalculatePressureGradiant( uint32_t index ) noexcept
 
         //-------------------------------------------------------------------------
 
-        float influence       = SimpleSmoothinKernalDerivative2D( m_PhysicsSettings.SmoothingRadius, distance );
-        float averageDensity  = ( m_Densities[i] + m_Densities[index] ) * 0.5f;
-        gradient             -= Vector2Normalize( difference ) * m_Masses * influence * m_Pressures[i] / averageDensity;
+        float influence        = SimpleSmoothinKernalDerivative2D( m_PhysicsSettings.SmoothingRadius, distance );
+        float averagePressure  = ( m_Pressures[i] + m_Pressures[index] ) * 0.5f;
+        gradient              -= Vector2Normalize( difference ) * m_Masses * influence * averagePressure / m_Densities[i];
 
         //-------------------------------------------------------------------------
     }
@@ -453,7 +484,7 @@ void Simulation::Render() noexcept
 
     //-------------------------------------------------------------------------
 
-    ClearBackground( RAYWHITE );
+    ClearBackground( GRAY );
 
     switch ( m_DebugSettings.Field )
     {
@@ -482,6 +513,7 @@ void Simulation::Render() noexcept
 
         for ( uint32_t i = 0; i < m_Positions.size(); i++ )
         {
+            DrawCircleV( WorldSpaceToScreenSpace( m_Positions[i] ), m_DebugSettings.ParticleDrawRadius + 0.5f, BLACK );
             DrawCircleV( WorldSpaceToScreenSpace( m_Positions[i] ), m_DebugSettings.ParticleDrawRadius, m_ParticleColors[i] );
         }
     }
@@ -616,10 +648,19 @@ void Simulation::DrawPhysicsOverlay() noexcept
     //-------------------------------------------------------------------------
 
     ImGui::Text( "Parameters" );
-
     ImGui::InputFloat( "Smoothing radius", &m_PhysicsSettings.SmoothingRadius, 0.001f, 0.1f );
-    ImGui::InputFloat( "Pressure Multiplier", &m_PhysicsSettings.PressureMultiplier, 0.1f, 1.0f );
     ImGui::InputFloat( "Target Density", &m_PhysicsSettings.TargetDensity, 0.1f, 1.0f );
+    ImGui::Separator();
+
+    //-------------------------------------------------------------------------
+
+    ImGui::Checkbox( " Pressure Force ", &m_PhysicsSettings.ApplyPressureForce );
+    ImGui::SameLine();
+    ImGui::Checkbox( " Gravity ", &m_PhysicsSettings.ApplyGravity );
+
+    if ( m_PhysicsSettings.ApplyPressureForce ) { ImGui::InputFloat( "Pressure Multiplier", &m_PhysicsSettings.PressureMultiplier, 0.1f, 1.0f ); }
+    if ( m_PhysicsSettings.ApplyGravity ) { ImGui::InputFloat( "Gravity Multiplier", &m_PhysicsSettings.GravityMultiplier, 0.01f, 0.1f ); }
+
     ImGui::End();
 }
 
