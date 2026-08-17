@@ -40,6 +40,46 @@ struct PhysicsSettings
     //-------------------------------------------------------------------------
 };
 
+enum class DebugField
+{
+    None = 0,
+    Density,
+    Pressure,
+};
+
+// Since the drawing of the particles, aren't actually neccesary, it is considered to be part of the debug...
+struct DebugSettings
+{
+
+    //-------------------------------------------------------------------------
+
+    uint32_t   RenderResolution;
+    float      ParticleDrawRadius{ 5.0f };
+    bool       Draw{ true };
+    DebugField Field{ DebugField::None };
+
+    //-------------------------------------------------------------------------
+
+    // This is the size of a texture, we generate to project the different fields for debug.
+    // A larger value doesn't matter a lot, at we just want a general sense whether or not out field looks right.
+    uint32_t           DebugFieldResolution{ 100 };
+    std::vector<Color> DebugPixels;
+    Texture2D          DebugTexture;
+
+    //-------------------------------------------------------------------------
+
+    // Some settings for how to color it.
+    float DebugFieldMin{ -20.0f };
+    float DebugFieldMiddle{ 0.0f };
+    float DebugFieldMax{ 20.0f };
+
+    Color DebugMinColor{ BLUE };
+    Color DebugMiddleColor{ WHITE };
+    Color DebugMaxColor{ RED };
+
+    //-------------------------------------------------------------------------
+};
+
 //-------------------------------------------------------------------------
 
 class Simulation
@@ -77,7 +117,8 @@ private:
 
     void Render() noexcept;
 
-    void DrawPhysicsOverlayer() noexcept;
+    void DrawPhysicsOverlay() noexcept;
+    void DrawDebugOverlay() noexcept;
 
     //-------------------------------------------------------------------------
 
@@ -110,42 +151,14 @@ private:
 private:
 
     PhysicsSettings m_PhysicsSettings{};
-
-    // Window settings:
-    //-------------------------------------------------------------------------
-
-    // Both x and y are equal.
-    uint32_t m_RenderResolution;
-
-    // Render settings:
-    //-------------------------------------------------------------------------
-
-    float              m_ParticleDrawRadius{ 5.0f };
-    std::vector<Color> m_ParticleColors; // Initialized manually.
-
-    // Debug settings:
-    //-------------------------------------------------------------------------
-
-    // This is the size of a texture, we generate to project the different fields for debug.
-    // A larger value doesn't matter a lot, at we just want a general sense whether or not out field looks right.
-    uint32_t           m_DebugFieldResolution{ 100 };
-    std::vector<Color> m_DebugPixels;
-    Texture2D          m_DebugTexture;
-
-    // Some settings for how to color it.
-    float m_DebugFieldMin{ -10.0f };
-    float m_DebugFieldMiddle{ 0.0f };
-    float m_DebugFieldMax{ 10.0f };
-
-    Color m_DebugMinColor{ BLUE };
-    Color m_DebugMiddleColor{ WHITE };
-    Color m_DebugMaxColor{ RED };
+    DebugSettings   m_DebugSettings{};
 
     // Particle info:
     //-------------------------------------------------------------------------
 
     std::vector<Vector2> m_Positions;
     std::vector<Vector2> m_Velocities;
+    std::vector<Color>   m_ParticleColors; // Initialized manually.
     float                m_Masses{ 1.0f };
 
     // The variant values, calculated based on the particles.

@@ -41,7 +41,7 @@ Simulation::Simulation( uint32_t size )
 
     //-------------------------------------------------------------------------
 
-    m_RenderResolution = size;
+    m_DebugSettings.RenderResolution = size;
 
     //-------------------------------------------------------------------------
 
@@ -59,9 +59,9 @@ Simulation::Simulation( uint32_t size )
     for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
     {
         // Position
-        float x = GetRandomValue( 0.0f, m_RenderResolution );
-        float y = GetRandomValue( 0.0f, m_RenderResolution );
-        m_Positions.push_back( Vector2( x, y ) / m_RenderResolution * m_PhysicsSettings.SimulationResolution );
+        float x = GetRandomValue( 0.0f, m_DebugSettings.RenderResolution );
+        float y = GetRandomValue( 0.0f, m_DebugSettings.RenderResolution );
+        m_Positions.push_back( Vector2( x, y ) / m_DebugSettings.RenderResolution * m_PhysicsSettings.SimulationResolution );
 
         //-------------------------------------------------------------------------
 
@@ -93,29 +93,29 @@ Simulation::Simulation( uint32_t size )
     UpdatePressureGradiant();
 
     // Create the debug texture:
-    m_DebugPixels.resize( m_DebugFieldResolution * m_DebugFieldResolution );
+    m_DebugSettings.DebugPixels.resize( m_DebugSettings.DebugFieldResolution * m_DebugSettings.DebugFieldResolution );
 
     Image debugImg = {
-        .data    = m_DebugPixels.data(),
-        .width   = static_cast<int>( m_DebugFieldResolution ),
-        .height  = static_cast<int>( m_DebugFieldResolution ),
+        .data    = m_DebugSettings.DebugPixels.data(),
+        .width   = static_cast<int>( m_DebugSettings.DebugFieldResolution ),
+        .height  = static_cast<int>( m_DebugSettings.DebugFieldResolution ),
         .mipmaps = 1,
         .format  = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8 };
 
-    m_DebugTexture = LoadTextureFromImage( debugImg );
-    SetTextureFilter( m_DebugTexture, TEXTURE_FILTER_BILINEAR );
+    m_DebugSettings.DebugTexture = LoadTextureFromImage( debugImg );
+    SetTextureFilter( m_DebugSettings.DebugTexture, TEXTURE_FILTER_BILINEAR );
 }
 
 Simulation::~Simulation()
 {
-    UnloadTexture( m_DebugTexture );
+    UnloadTexture( m_DebugSettings.DebugTexture );
     rlImGuiShutdown();
     CloseWindow();
 }
 
 Vector2 Simulation::WorldSpaceToScreenSpace( Vector2 WS ) noexcept
 {
-    return Vector2Scale( WS, m_RenderResolution / m_PhysicsSettings.SimulationResolution );
+    return Vector2Scale( WS, m_DebugSettings.RenderResolution / m_PhysicsSettings.SimulationResolution );
 }
 
 //-------------------------------------------------------------------------
@@ -134,9 +134,9 @@ void Simulation::Restart() noexcept
     for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
     {
         // Position
-        float x        = GetRandomValue( 0.0f, m_RenderResolution );
-        float y        = GetRandomValue( 0.0f, m_RenderResolution );
-        m_Positions[i] = Vector2( x, y ) / m_RenderResolution * m_PhysicsSettings.SimulationResolution;
+        float x        = GetRandomValue( 0.0f, m_DebugSettings.RenderResolution );
+        float y        = GetRandomValue( 0.0f, m_DebugSettings.RenderResolution );
+        m_Positions[i] = Vector2( x, y ) / m_DebugSettings.RenderResolution * m_PhysicsSettings.SimulationResolution;
 
         //-------------------------------------------------------------------------
 
@@ -455,26 +455,41 @@ void Simulation::Render() noexcept
 
     ClearBackground( RAYWHITE );
 
-    // DrawDensity();
-    // DrawPressure();
-
-    //-------------------------------------------------------------------------
-
-    for ( uint32_t i = 0; i < m_BorderP1.size(); i++ )
+    switch ( m_DebugSettings.Field )
     {
-        DrawLineEx( WorldSpaceToScreenSpace( m_BorderP1[i] ), WorldSpaceToScreenSpace( m_BorderP2[i] ), 3.0f, BLACK );
+        case DebugField::None:
+            break;
+
+        case DebugField::Density:
+            DrawDensity();
+            break;
+
+        case DebugField::Pressure:
+            DrawPressure();
+            break;
     }
 
     //-------------------------------------------------------------------------
 
-    for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+    if ( m_DebugSettings.Draw )
     {
-        DrawCircleV( WorldSpaceToScreenSpace( m_Positions[i] ), m_ParticleDrawRadius, m_ParticleColors[i] );
+        for ( uint32_t i = 0; i < m_BorderP1.size(); i++ )
+        {
+            DrawLineEx( WorldSpaceToScreenSpace( m_BorderP1[i] ), WorldSpaceToScreenSpace( m_BorderP2[i] ), 3.0f, BLACK );
+        }
+
+        //-------------------------------------------------------------------------
+
+        for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+        {
+            DrawCircleV( WorldSpaceToScreenSpace( m_Positions[i] ), m_DebugSettings.ParticleDrawRadius, m_ParticleColors[i] );
+        }
     }
 
     //-------------------------------------------------------------------------
 
-    DrawPhysicsOverlayer();
+    DrawPhysicsOverlay();
+    DrawDebugOverlay();
 
     //-------------------------------------------------------------------------
 
@@ -486,25 +501,18 @@ void Simulation::Render() noexcept
 
 void Simulation::DrawDensity() noexcept
 {
-    ImGui::Begin( " Debug Params " );
-
-    ImGui::Separator();
-    ImGui::SliderFloat( "Debug field max", &m_DebugFieldMax, 0.0f, 100.0f );
-    ImGui::SliderFloat( "Debug field min", &m_DebugFieldMiddle, 0.0f, m_DebugFieldMax );
-
-    ImGui::End();
 
     // How does each pixel location map to the world?
-    float cellToWorld = m_PhysicsSettings.SimulationResolution / m_DebugFieldResolution;
+    float cellToWorld = m_PhysicsSettings.SimulationResolution / m_DebugSettings.DebugFieldResolution;
 
-    std::for_each( std::execution::par_unseq, m_DebugPixels.begin(), m_DebugPixels.end(),
+    std::for_each( std::execution::par_unseq, m_DebugSettings.DebugPixels.begin(), m_DebugSettings.DebugPixels.end(),
                    [this, cellToWorld]( Color& pixel ) {
                        //-------------------------------------------------------------------------
 
                        // Get the row and column for the current idx.
-                       size_t i   = &pixel - this->m_DebugPixels.data();
-                       size_t col = i % this->m_DebugFieldResolution;
-                       size_t row = i / this->m_DebugFieldResolution;
+                       size_t i   = &pixel - this->m_DebugSettings.DebugPixels.data();
+                       size_t col = i % this->m_DebugSettings.DebugFieldResolution;
+                       size_t row = i / this->m_DebugSettings.DebugFieldResolution;
 
                        //-------------------------------------------------------------------------
 
@@ -514,42 +522,33 @@ void Simulation::DrawDensity() noexcept
                        //-------------------------------------------------------------------------
 
                        // Map the density to the color.
-                       float t = ( density - this->m_DebugFieldMiddle ) / ( this->m_DebugFieldMax - this->m_DebugFieldMiddle );
-                       pixel   = ColorLerp( this->m_DebugMiddleColor, this->m_DebugMaxColor, t );
+                       float t = ( density - this->m_DebugSettings.DebugFieldMiddle ) / ( this->m_DebugSettings.DebugFieldMax - this->m_DebugSettings.DebugFieldMiddle );
+                       pixel   = ColorLerp( this->m_DebugSettings.DebugMiddleColor, this->m_DebugSettings.DebugMaxColor, t );
 
                        //-------------------------------------------------------------------------
                    } );
 
     // Update the texture data, and draw it.
-    UpdateTexture( m_DebugTexture, m_DebugPixels.data() );
+    UpdateTexture( m_DebugSettings.DebugTexture, m_DebugSettings.DebugPixels.data() );
 
-    DrawTexturePro( m_DebugTexture, { 0, 0, static_cast<float>( m_DebugFieldResolution ), static_cast<float>( m_DebugFieldResolution ) },
-                    { 0, 0, static_cast<float>( m_RenderResolution ), static_cast<float>( m_RenderResolution ) }, { 0, 0 }, 0, WHITE );
+    DrawTexturePro( m_DebugSettings.DebugTexture, { 0, 0, static_cast<float>( m_DebugSettings.DebugFieldResolution ), static_cast<float>( m_DebugSettings.DebugFieldResolution ) },
+                    { 0, 0, static_cast<float>( m_DebugSettings.RenderResolution ), static_cast<float>( m_DebugSettings.RenderResolution ) }, { 0, 0 }, 0, WHITE );
 }
 
 void Simulation::DrawPressure() noexcept
 {
 
-    ImGui::Begin( " Debug Params " );
-
-    ImGui::Separator();
-    ImGui::SliderFloat( "Debug field max", &m_DebugFieldMax, 0.0f, 50.0f );
-    ImGui::SliderFloat( "Debug field min", &m_DebugFieldMin, -50.0f, 0.0f );
-    ImGui::SliderFloat( "Debug field middle", &m_DebugFieldMiddle, m_DebugFieldMin, m_DebugFieldMax );
-
-    ImGui::End();
-
     // How does each pixel location map to the world?
-    float cellToWorld = m_PhysicsSettings.SimulationResolution / m_DebugFieldResolution;
+    float cellToWorld = m_PhysicsSettings.SimulationResolution / m_DebugSettings.DebugFieldResolution;
 
-    std::for_each( std::execution::par_unseq, m_DebugPixels.begin(), m_DebugPixels.end(),
+    std::for_each( std::execution::par_unseq, m_DebugSettings.DebugPixels.begin(), m_DebugSettings.DebugPixels.end(),
                    [this, cellToWorld]( Color& pixel ) {
                        //-------------------------------------------------------------------------
 
                        // Get the row and column for the current idx.
-                       size_t i   = &pixel - this->m_DebugPixels.data();
-                       size_t col = i % this->m_DebugFieldResolution;
-                       size_t row = i / this->m_DebugFieldResolution;
+                       size_t i   = &pixel - this->m_DebugSettings.DebugPixels.data();
+                       size_t col = i % this->m_DebugSettings.DebugFieldResolution;
+                       size_t row = i / this->m_DebugSettings.DebugFieldResolution;
 
                        //-------------------------------------------------------------------------
 
@@ -560,36 +559,36 @@ void Simulation::DrawPressure() noexcept
 
                        // Map the density to the color.
 
-                       if ( pressure < m_DebugFieldMiddle )
+                       if ( pressure < m_DebugSettings.DebugFieldMiddle )
                        {
-                           float t = ( pressure - this->m_DebugFieldMin ) / ( this->m_DebugFieldMiddle - this->m_DebugFieldMin );
-                           pixel   = ColorLerp( this->m_DebugMinColor, this->m_DebugMiddleColor, t );
+                           float t = ( pressure - this->m_DebugSettings.DebugFieldMin ) / ( this->m_DebugSettings.DebugFieldMiddle - this->m_DebugSettings.DebugFieldMin );
+                           pixel   = ColorLerp( this->m_DebugSettings.DebugMinColor, this->m_DebugSettings.DebugMiddleColor, t );
                        }
                        else
                        {
-                           float t = ( pressure - this->m_DebugFieldMiddle ) / ( this->m_DebugFieldMax - this->m_DebugFieldMiddle );
-                           pixel   = ColorLerp( this->m_DebugMiddleColor, this->m_DebugMaxColor, t );
+                           float t = ( pressure - this->m_DebugSettings.DebugFieldMiddle ) / ( this->m_DebugSettings.DebugFieldMax - this->m_DebugSettings.DebugFieldMiddle );
+                           pixel   = ColorLerp( this->m_DebugSettings.DebugMiddleColor, this->m_DebugSettings.DebugMaxColor, t );
                        }
 
                        //-------------------------------------------------------------------------
                    } );
 
     // Update the texture data, and draw it.
-    UpdateTexture( m_DebugTexture, m_DebugPixels.data() );
+    UpdateTexture( m_DebugSettings.DebugTexture, m_DebugSettings.DebugPixels.data() );
 
-    DrawTexturePro( m_DebugTexture, { 0, 0, static_cast<float>( m_DebugFieldResolution ), static_cast<float>( m_DebugFieldResolution ) },
-                    { 0, 0, static_cast<float>( m_RenderResolution ), static_cast<float>( m_RenderResolution ) }, { 0, 0 }, 0, WHITE );
+    DrawTexturePro( m_DebugSettings.DebugTexture, { 0, 0, static_cast<float>( m_DebugSettings.DebugFieldResolution ), static_cast<float>( m_DebugSettings.DebugFieldResolution ) },
+                    { 0, 0, static_cast<float>( m_DebugSettings.RenderResolution ), static_cast<float>( m_DebugSettings.RenderResolution ) }, { 0, 0 }, 0, WHITE );
 }
 
 //-------------------------------------------------------------------------
 
 // It is assumed that rlImGuiBegin() and rlImGuiEnd() are called outside this scope.;
-void Simulation::DrawPhysicsOverlayer() noexcept
+void Simulation::DrawPhysicsOverlay() noexcept
 {
 
     //-------------------------------------------------------------------------
 
-    ImGui::Begin( " Physics Settigns " );
+    ImGui::Begin( " Physics Settings " );
 
     //-------------------------------------------------------------------------
 
@@ -618,9 +617,41 @@ void Simulation::DrawPhysicsOverlayer() noexcept
 
     ImGui::Text( "Parameters" );
 
-    ImGui::SliderFloat( "Smoothing radius", &m_PhysicsSettings.SmoothingRadius, 0.01f, 2.0f );
-    ImGui::SliderFloat( "Pressure Multiplier", &m_PhysicsSettings.PressureMultiplier, 0.0f, 10.0f );
-    ImGui::SliderFloat( "Target Density", &m_PhysicsSettings.TargetDensity, 0.0f, 20.0f );
+    ImGui::InputFloat( "Smoothing radius", &m_PhysicsSettings.SmoothingRadius, 0.001f, 0.1f );
+    ImGui::InputFloat( "Pressure Multiplier", &m_PhysicsSettings.PressureMultiplier, 0.1f, 1.0f );
+    ImGui::InputFloat( "Target Density", &m_PhysicsSettings.TargetDensity, 0.1f, 1.0f );
+    ImGui::End();
+}
+
+void Simulation::DrawDebugOverlay() noexcept
+{
+
+    ImGui::Begin( "Debug Settings" );
+
+    ImGui::Text( "Ball drawing" );
+    ImGui::Checkbox( " Draw Balls ", &m_DebugSettings.Draw );
+    if ( m_DebugSettings.Draw ) { ImGui::SliderFloat( "Ball radius", &m_DebugSettings.ParticleDrawRadius, 0.0f, 10.0f ); }
+
+    ImGui::Separator();
+    ImGui::Text( "Debug Texture Mode" );
+    if ( ImGui::Button( " None " ) ) { m_DebugSettings.Field = DebugField::None; }
+    ImGui::SameLine();
+    if ( ImGui::Button( " Density " ) ) { m_DebugSettings.Field = DebugField::Density; }
+    ImGui::SameLine();
+    if ( ImGui::Button( " Pressure " ) ) { m_DebugSettings.Field = DebugField::Pressure; }
+
+    if ( m_DebugSettings.Field == DebugField::Density )
+    {
+        ImGui::SliderFloat( "Debug field max", &m_DebugSettings.DebugFieldMax, 0.0f, 100.0f );
+        ImGui::SliderFloat( "Debug field min", &m_DebugSettings.DebugFieldMiddle, 0.0f, m_DebugSettings.DebugFieldMax );
+    }
+    else if ( m_DebugSettings.Field == DebugField::Pressure )
+    {
+        ImGui::SliderFloat( "Debug field max", &m_DebugSettings.DebugFieldMax, 0.0f, 100.0f );
+        ImGui::SliderFloat( "Debug field middle", &m_DebugSettings.DebugFieldMiddle, m_DebugSettings.DebugFieldMin, m_DebugSettings.DebugFieldMax );
+        ImGui::SliderFloat( "Debug field min", &m_DebugSettings.DebugFieldMin, -100.0f, 0.0f );
+    }
+
     ImGui::End();
 }
 
