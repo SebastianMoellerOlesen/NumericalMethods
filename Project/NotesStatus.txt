@@ -9,3 +9,16 @@ Then i should use the formulas in the paper, to calculate the pressure gradient.
 It would be quite interesting to simulate using two different methods, and see the stability of the simulation, aswell as looking at different
 time step, using both the current implicit, and potential future RK4 method...
 Then the question is how RK4, with O(dx^4) would actually work, when our interpolation is of O(dx^2) or smt according to the first paper...
+
+Improving the speed of the simulation, by introducing a grid based structure.
+FPS before was ~290. This is for 2k particles.
+FPS after is ~350. This was also for 2k particles.
+
+This is not all to well, considering that was done without drawing the balls, which takes a majority of the time.
+Instead i will implement in a different way.
+
+Instead of just generating the the vector each time, i will sort the particles, so that i can loop directly through them (Nice with the cache)
+And the bonus is i only have to calulate it once during each frame, instead of providing the surrounding indices each time.
+FPS before is roughly 300 for 2k particles.
+The FPS after is roughly 2900, for the same 2k particles.
+The behaviour seems to be the same aswell.

@@ -4,6 +4,7 @@
 #include <raylib.h>
 
 #include <cstdint>
+#include <span>
 #include <vector>
 
 //-------------------------------------------------------------------------
@@ -158,15 +159,35 @@ private:
 
     //-------------------------------------------------------------------------
 
+    // To be able to scale the stuff, at runtime,
+    // we need to compute the grid for each particle each frame.
+    void                 UpdateGridIndices() noexcept;
+    int32_t              GetGridIndex( Vector2 pos ) noexcept;
+    std::vector<int32_t> GetNeighbourCells( int32_t i ) noexcept;
+    std::span<int32_t>   GetParticlesInCell( int32_t i ) noexcept;
+    // Would be a nice API, to just do ForEachSurrounding(index, []() {update}) // Just for the future, if i have time.
+
+    //-------------------------------------------------------------------------
+
 private:
+
+    //-------------------------------------------------------------------------
 
     PhysicsSettings m_PhysicsSettings{};
     DebugSettings   m_DebugSettings{};
+
+    //-------------------------------------------------------------------------
+
+    // Grid stuff...
+    std::vector<int32_t> m_GridIndices;
+    std::vector<int32_t> m_CellStart;       // Maps cell to the start of the particles in the cell in the sorted particles.
+    std::vector<int32_t> m_SortedParticles; // Maps to the actual position.
 
     // Particle info:
     //-------------------------------------------------------------------------
 
     std::vector<Vector2> m_Positions;
+    int32_t              m_GridAxisSize{ 0 };
     std::vector<Vector2> m_Velocities;
     std::vector<Color>   m_ParticleColors; // Initialized manually.
     float                m_Masses{ 1.0f };

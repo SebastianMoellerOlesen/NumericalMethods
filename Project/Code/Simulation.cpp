@@ -13,7 +13,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <execution>
+#include <span>
 #include <unistd.h>
+#include <ranges>
 #include <utility>
 #include <vector>
 
@@ -26,7 +28,7 @@ Simulation::Simulation( uint32_t size )
 
     SetConfigFlags( FLAG_WINDOW_HIGHDPI );
     InitWindow( size, size, "Simulation" );
-    SetTargetFPS( m_PhysicsSettings.TargetFPS ); // Debatable if it should be in the physics settings...
+    // SetTargetFPS( m_PhysicsSettings.TargetFPS ); // Debatable if it should be in the physics settings...
 
     BeginDrawing();
     EndDrawing();
@@ -82,6 +84,14 @@ Simulation::Simulation( uint32_t size )
         //-------------------------------------------------------------------------
     }
 
+    //-------------------------------------------------------------------------
+
+    // Initilize the boxes.
+    m_GridIndices.resize( m_PhysicsSettings.ParticleCount );
+    UpdateGridIndices();
+
+    //-------------------------------------------------------------------------
+
     // Initialize the fields.
     m_Densities.resize( m_PhysicsSettings.ParticleCount );
     UpdateDensities();
@@ -91,6 +101,8 @@ Simulation::Simulation( uint32_t size )
 
     m_PressureGradiants.resize( m_PhysicsSettings.ParticleCount );
     UpdatePressureGradiant();
+
+    //-------------------------------------------------------------------------
 
     // Create the debug texture:
     m_DebugSettings.DebugPixels.resize( m_DebugSettings.DebugFieldResolution * m_DebugSettings.DebugFieldResolution );
@@ -113,6 +125,8 @@ Simulation::~Simulation()
     CloseWindow();
 }
 
+//-------------------------------------------------------------------------
+
 Vector2 Simulation::WorldSpaceToScreenSpace( Vector2 WS ) noexcept
 {
     return Vector2Scale( WS, m_DebugSettings.RenderResolution / m_PhysicsSettings.SimulationResolution );
@@ -120,6 +134,122 @@ Vector2 Simulation::WorldSpaceToScreenSpace( Vector2 WS ) noexcept
 
 //-------------------------------------------------------------------------
 
+int32_t Simulation::GetGridIndex( Vector2 pos ) noexcept
+{
+    pos        /= m_PhysicsSettings.SmoothingRadius;
+    uint32_t x  = pos.x; // Should floor, if bugs, mabey this is rounding...
+    uint32_t y  = pos.y; // -| |-
+    return x + y * m_GridAxisSize;
+}
+
+//-------------------------------------------------------------------------
+
+void Simulation::UpdateGridIndices() noexcept
+{
+
+    //-------------------------------------------------------------------------
+
+    m_GridAxisSize = m_PhysicsSettings.SimulationResolution / m_PhysicsSettings.SmoothingRadius;
+    ++m_GridAxisSize; // We increment by one, to account for any potential flooring. Having this be one larger than necessary won't matter.
+
+    //-------------------------------------------------------------------------
+
+    std::for_each( std::execution::par_unseq, m_Positions.begin(), m_Positions.end(), [this]( const Vector2& pos ) {
+        size_t i         = &pos - m_Positions.data();
+        m_GridIndices[i] = GetGridIndex( pos );
+    } );
+
+    //-------------------------------------------------------------------------
+
+    uint32_t cellCount = m_GridAxisSize * m_GridAxisSize;
+
+    //-------------------------------------------------------------------------
+
+    // Reset the indexing.
+    // We use cellCount + 1, so we can easily acces the indices that belong to a cell, by just taking all the indices between [cellindex] -> [cellindex + 1]
+    m_CellStart.assign( cellCount + 1, 0 );
+
+    // Generate the starting index for each cell.
+    for ( int32_t cell : m_GridIndices ) { m_CellStart[cell + 1]++; }                                                           // How many particles are in each cell.
+    for ( int32_t cellIndex = 0; cellIndex < cellCount; cellIndex++ ) { m_CellStart[cellIndex + 1] += m_CellStart[cellIndex]; } // numpy.cumsum equivalent.
+
+    //-------------------------------------------------------------------------
+
+    // Now we sort the particles.
+    m_SortedParticles.resize( m_GridIndices.size() );
+
+    //-------------------------------------------------------------------------
+
+    // Track where we should place the next particle, that belongs to a specific cell.
+    std::vector<int32_t> NextIndex = m_CellStart;
+
+    // For each particle
+    for ( size_t i = 0; i < m_GridIndices.size(); i++ )
+    {
+        // Get the cell for the particle.
+        int32_t cell = m_GridIndices[i];
+
+        // Place it into the Next index, for the cell it belongs to.
+        int32_t& sortedIndex           = NextIndex[cell];
+        m_SortedParticles[sortedIndex] = i;
+        sortedIndex++; // Increment the index, so its ready for the next particle.
+    }
+}
+
+//-------------------------------------------------------------------------
+
+std::vector<int32_t> Simulation::GetNeighbourCells( int32_t i ) noexcept
+{
+
+    //-------------------------------------------------------------------------
+
+    int32_t col = i % m_GridAxisSize;
+    int32_t row = i / m_GridAxisSize;
+
+    //-------------------------------------------------------------------------
+
+    std::vector<int32_t> neighbours;
+    neighbours.reserve( 9 ); // At best, we can have 9 cells, including the center.
+
+    //-------------------------------------------------------------------------
+
+    for ( int32_t dy = -1; dy <= 1; dy++ )
+    {
+        for ( int32_t dx = -1; dx <= 1; dx++ )
+        {
+            // Get the location of the cell.
+            int32_t c = col + dx;
+            int32_t r = row + dy;
+
+            // Check if the location is within bound.
+            // Note this needs to be reworked, if implementing something like ghost cells.
+            if ( c > 0 || c < m_GridAxisSize || r > 0 || r < m_GridAxisSize )
+            {
+                neighbours.push_back( c + r * m_GridAxisSize );
+            }
+        }
+    }
+
+    //-------------------------------------------------------------------------
+
+    return neighbours;
+
+    //-------------------------------------------------------------------------
+}
+
+//-------------------------------------------------------------------------
+
+std::span<int32_t> Simulation::GetParticlesInCell( int32_t i ) noexcept
+{
+    // Bounds checking
+    if ( i < 0 || i >= m_CellStart.size() - 1 )
+    {
+        return {};
+    }
+    return { m_SortedParticles.data() + m_CellStart[i], static_cast<size_t>( m_CellStart[i + 1] - m_CellStart[i] ) };
+}
+
+//-------------------------------------------------------------------------
 void Simulation::Run() noexcept
 {
     while ( !WindowShouldClose() )
@@ -207,9 +337,11 @@ void Simulation::ImplicitUpdate() noexcept
         m_Positions[i] += m_Velocities[i] * m_PhysicsSettings.DeltaTime;
     }
 
+    HandleBorderCollision();
     //-------------------------------------------------------------------------
 
     // Update velocity implicitly.
+    UpdateGridIndices();
     UpdateDensities();
     UpdatePressures();
     UpdatePressureGradiant();
@@ -253,6 +385,8 @@ void Simulation::ExplicitUpdate() noexcept
 {
 
     //-------------------------------------------------------------------------
+
+    UpdateGridIndices();
 
     UpdateDensities();
     UpdatePressures();
@@ -320,9 +454,13 @@ void Simulation::HandleBorderCollision() noexcept
 
 float Simulation::CalculateDensity( Vector2 location ) noexcept
 {
-    float density = 0;
 
-    for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
+    int32_t index            = GetGridIndex( location );
+    auto    cells            = GetNeighbourCells( index );
+    auto    neighbourIndices = cells | std::views::transform( [this]( int32_t cell ) { return GetParticlesInCell( cell ); } ) | std::views::join;
+
+    float density = 0;
+    for ( int32_t i : neighbourIndices )
     {
         float distance   = Vector2Length( location - m_Positions[i] );
         float influence  = SimpleSmoothingKernal2D( m_PhysicsSettings.SmoothingRadius, distance );
@@ -392,6 +530,8 @@ void Simulation::UpdatePressures() noexcept
                    } );
 }
 
+//-------------------------------------------------------------------------
+
 void Simulation::UpdatePressureGradiant() noexcept
 {
     std::for_each( std::execution::par_unseq, m_Positions.begin(), m_Positions.end(), [this]( const Vector2& pos ) {
@@ -400,12 +540,26 @@ void Simulation::UpdatePressureGradiant() noexcept
     } );
 }
 
+//-------------------------------------------------------------------------
+
 Vector2 Simulation ::CalculatePressureGradiant( Vector2 location ) noexcept
 {
+
+    //-------------------------------------------------------------------------
+
+    int32_t index            = GetGridIndex( location );
+    auto    cells            = GetNeighbourCells( index );
+    auto    neighbourIndices = cells | std::views::transform( [this]( int32_t cell ) { return GetParticlesInCell( cell ); } ) | std::views::join;
+
+    //-------------------------------------------------------------------------
+
     Vector2 gradient = Vector2Zero();
 
-    for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
+    //-------------------------------------------------------------------------
+
+    for ( int32_t i : neighbourIndices )
     {
+
         Vector2 difference = location - m_Positions[i];
         float   distance   = Vector2Length( difference );
 
@@ -429,11 +583,17 @@ Vector2 Simulation::CalculatePressureGradiant( uint32_t index ) noexcept
 {
     //-------------------------------------------------------------------------
 
+    int32_t cell             = GetGridIndex( m_Positions[index] );
+    auto    cells            = GetNeighbourCells( cell );
+    auto    neighbourIndices = cells | std::views::transform( [this]( int32_t cell ) { return GetParticlesInCell( cell ); } ) | std::views::join;
+
+    //-------------------------------------------------------------------------
+
     Vector2 gradient = Vector2Zero();
 
     //-------------------------------------------------------------------------
 
-    for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
+    for ( int32_t i : neighbourIndices )
     {
 
         //-------------------------------------------------------------------------
@@ -693,6 +853,12 @@ void Simulation::DrawDebugOverlay() noexcept
         ImGui::SliderFloat( "Debug field min", &m_DebugSettings.DebugFieldMin, -100.0f, 0.0f );
     }
 
+    ImGui::End();
+
+    // Just debug stuff...
+    ImGui::Begin( "DEBUG" );
+    ImGui::Text( " The axis size of the grid is currently: %i ", m_GridAxisSize );
+    ImGui::Text( " This gives a simulation width of: %.02f ", m_GridAxisSize * m_PhysicsSettings.SmoothingRadius );
     ImGui::End();
 }
 
