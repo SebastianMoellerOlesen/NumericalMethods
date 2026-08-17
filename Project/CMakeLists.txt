@@ -13,33 +13,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # ==================================
-#    CONFIGURE COMPILER WARNINGS
-# ==================================
-
-add_library(Warnings INTERFACE)
-
-if(MSVC)
-  target_compile_options(Warnings INTERFACE
-        /W4
-        /WX
-    )
-else()
-  target_compile_options(Warnings INTERFACE
-        -Wall
-        -Wextra
-        -Wpedantic
-        -Werror
-        -Wshadow
-        -Wnon-virtual-dtor
-        -Woverloaded-virtual
-        -Wnull-dereference
-        -Wimplicit-fallthrough
-        -Wcast-align=strict
-        -Wformat=2
-    )
-endif()
-
-# ==================================
 # INTERPROCEDURAL OPTIMIZATION (LTO)
 # ==================================
 

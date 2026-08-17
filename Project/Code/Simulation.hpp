@@ -7,6 +7,15 @@
 
 //-------------------------------------------------------------------------
 
+enum class UpdateScheme : uint8_t
+{
+    Explicit = 0,
+    Implicit = 1,
+    // Mabey RK4?
+};
+
+//-------------------------------------------------------------------------
+
 class Simulation
 {
 
@@ -29,9 +38,16 @@ private:
     //-------------------------------------------------------------------------
 
     void Update() noexcept;
+
+    void SetScheme( UpdateScheme scheme ) noexcept;
+    void ExplicitUpdate() noexcept;
+    void ImplicitUpdate() noexcept;
+
     void UpdateDensities() noexcept; // Currently uses an explicit method, with the current pos, and density.
     void UpdatePressures() noexcept; // Just conversion from Densities to pressure by some method...
     void UpdatePressureGradiant() noexcept;
+
+    void ApplyForces() noexcept;
 
     void Render() noexcept;
 
@@ -74,15 +90,16 @@ private:
 
     // Simulation size stuff
     float    m_SimulationResolution{ 10.0f }; // X and Y are same scale...
-    uint32_t m_ParticleCount{ 1000 };
+    uint32_t m_ParticleCount{ 3000 };
 
     // Particle param stuff
     float m_Masses{ 1.0f };
-    float m_TargetDensity{ 10.0f };
-    float m_SmoothingRadius{ 0.7f };
-    float m_PressureMultiplier{ 1.0f };
+    float m_TargetDensity{ m_ParticleCount / m_SimulationResolution / m_SimulationResolution / 1.3f }; // Trial and error.
+    float m_SmoothingRadius{ 0.3f };                                                                   // Should be calculated based on the initial parameters...
+    float m_PressureMultiplier{ 3.0f };
 
-    bool m_Paused{ true };
+    UpdateScheme m_UpdateScheme{ UpdateScheme::Implicit };
+    bool         m_Paused{ true };
 
     // Window settings:
     //-------------------------------------------------------------------------
@@ -101,7 +118,7 @@ private:
 
     // This is the size of a texture, we generate to project the different fields for debug.
     // A larger value doesn't matter a lot, at we just want a general sense whether or not out field looks right.
-    uint32_t           m_DebugFieldResolution{ 200 };
+    uint32_t           m_DebugFieldResolution{ 100 };
     std::vector<Color> m_DebugPixels;
     Texture2D          m_DebugTexture;
 

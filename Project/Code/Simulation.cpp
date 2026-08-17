@@ -2,7 +2,6 @@
 #include "SmoothingKernals.hpp"
 #include "Utils.hpp"
 
-#include <ostream>
 #include <raylib.h>
 #include <raymath.h>
 #include <imgui.h>
@@ -167,26 +166,59 @@ void Simulation::Restart() noexcept
 
 //-------------------------------------------------------------------------
 
+void Simulation::SetScheme( UpdateScheme scheme ) noexcept { m_UpdateScheme = scheme; }
+
 void Simulation::Update() noexcept
 {
-
-    // Explicit.
-    // When we have forces, this should mabey change.
-    //-------------------------------------------------------------------------
-    // Note: This is tested to me around 2x faster if flattening the vectors into regular floats.
-    // Each iteration takes less than 1 micro second for 1000 particles, so might not be worth it.
-    //-------------------------------------------------------------------------
-    // Note: It might also be viable to calculate it async, like we do with some of the others.
-    //-------------------------------------------------------------------------
 
     if ( m_Paused )
     {
         return;
     }
 
+    //-------------------------------------------------------------------------
+
+    switch ( m_UpdateScheme )
+    {
+        case UpdateScheme::Explicit:
+            ExplicitUpdate();
+            break;
+
+        case UpdateScheme::Implicit:
+            ImplicitUpdate();
+            break;
+    }
+}
+
+void Simulation::ImplicitUpdate() noexcept
+{
+
+    //-------------------------------------------------------------------------
+
+    // Save the old position so we can restore it after calculating the forces.
+    // It might also be viable to create another vector in the class, to hold forwardPos...
+    std::vector<Vector2> pos = m_Positions;
+
+    //-------------------------------------------------------------------------
+
+    for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+    {
+        m_Positions[i] += m_Velocities[i] * m_DeltaTime;
+    }
+
+    //-------------------------------------------------------------------------
+
+    // Update velocity implicitly.
     UpdateDensities();
     UpdatePressures();
     UpdatePressureGradiant();
+
+    //-------------------------------------------------------------------------
+
+    // Restore the old pos, so we can update it using the new vel.
+    m_Positions = std::move( pos );
+
+    //-------------------------------------------------------------------------
 
     for ( uint32_t i = 0; i < m_Positions.size(); i++ )
     {
@@ -194,7 +226,34 @@ void Simulation::Update() noexcept
         m_Positions[i]  += m_Velocities[i] * m_DeltaTime;
     }
 
+    //-------------------------------------------------------------------------
+
     // Make sure the balls stay inside the box.
+    // Acts like a reflective BC i guess...
+    HandleBorderCollision();
+}
+
+void Simulation::ExplicitUpdate() noexcept
+{
+
+    //-------------------------------------------------------------------------
+
+    UpdateDensities();
+    UpdatePressures();
+    UpdatePressureGradiant();
+
+    //-------------------------------------------------------------------------
+
+    for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+    {
+        m_Velocities[i] += m_PressureGradiants[i] / m_Densities[i] * m_DeltaTime;
+        m_Positions[i]  += m_Velocities[i] * m_DeltaTime;
+    }
+
+    //-------------------------------------------------------------------------
+
+    // Make sure the balls stay inside the box.
+    // Acts like a reflective BC i guess...
     HandleBorderCollision();
 }
 
@@ -256,7 +315,7 @@ void Simulation::UpdateDensities() noexcept
     //-------------------------------------------------------------------------
 
     std::vector<float> newDensities;
-    newDensities.reserve( m_ParticleCount );
+    newDensities.resize( m_ParticleCount );
 
     //-------------------------------------------------------------------------
 
@@ -368,8 +427,9 @@ Vector2 Simulation::CalculatePressureGradiant( uint32_t index ) noexcept
 
         //-------------------------------------------------------------------------
 
-        float influence  = SimpleSmoothingKernal2D( m_SmoothingRadius, distance );
-        gradient        += Vector2Normalize( difference ) * m_Masses * influence * m_Pressures[i] / m_Densities[i];
+        float influence       = SimpleSmoothinKernalDerivative2D( m_SmoothingRadius, distance );
+        float averageDensity  = ( m_Densities[i] + m_Densities[index] ) * 0.5f;
+        gradient             -= Vector2Normalize( difference ) * m_Masses * influence * m_Pressures[i] / averageDensity;
 
         //-------------------------------------------------------------------------
     }
@@ -389,11 +449,14 @@ void Simulation::Render() noexcept
     //-------------------------------------------------------------------------
 
     BeginDrawing();
+    rlImGuiBegin();
 
     //-------------------------------------------------------------------------
 
     ClearBackground( RAYWHITE );
-    DrawPressure();
+
+    // DrawDensity();
+    // DrawPressure();
 
     //-------------------------------------------------------------------------
 
@@ -411,30 +474,38 @@ void Simulation::Render() noexcept
 
     //-------------------------------------------------------------------------
 
-    rlImGuiBegin();
-
     ImGui::Begin( "Parameters" );
     ImGui::Checkbox( "Pause simulation", &m_Paused );
 
-    if ( ImGui::Button( " Restart Simulation ", ImVec2( 10, 10 ) ) )
+    if ( ImGui::Button( " Restart Simulation " ) )
     {
         Restart();
     }
+
+    ImGui::Separator();
+
+    ImGui::Text( "Integration Scheme:" );
+    if ( ImGui::Button( " Explicit " ) )
+    {
+        SetScheme( UpdateScheme::Explicit );
+    }
+    ImGui::SameLine();
+    if ( ImGui::Button( " Implicit " ) )
+    {
+        SetScheme( UpdateScheme::Implicit );
+    }
+
     ImGui::Separator();
     ImGui::SliderFloat( "Smoothing radius", &m_SmoothingRadius, 0.01f, 2.0f );
     ImGui::SliderFloat( "Pressure Multiplier", &m_PressureMultiplier, 0.0f, 10.0f );
     ImGui::SliderFloat( "Target Density", &m_TargetDensity, 0.0f, 20.0f );
     ImGui::Separator();
-    ImGui::SliderFloat( "Debug field max", &m_DebugFieldMax, 0.0f, 50.0f );
-    ImGui::SliderFloat( "Debug field min", &m_DebugFieldMin, -50.0f, 0.0f );
-    ImGui::SliderFloat( "Debug field middle", &m_DebugFieldMiddle, m_DebugFieldMin, m_DebugFieldMax );
     ImGui::Text( "%.1f FPS", static_cast<double>( GetFPS() ) );
     ImGui::End();
 
-    rlImGuiEnd();
-
     //-------------------------------------------------------------------------
 
+    rlImGuiEnd();
     EndDrawing();
 }
 
@@ -442,6 +513,13 @@ void Simulation::Render() noexcept
 
 void Simulation::DrawDensity() noexcept
 {
+    ImGui::Begin( " Debug Params " );
+
+    ImGui::Separator();
+    ImGui::SliderFloat( "Debug field max", &m_DebugFieldMax, 0.0f, 100.0f );
+    ImGui::SliderFloat( "Debug field min", &m_DebugFieldMiddle, 0.0f, m_DebugFieldMax );
+
+    ImGui::End();
 
     // How does each pixel location map to the world?
     float cellToWorld = m_SimulationResolution / m_DebugFieldResolution;
@@ -478,6 +556,15 @@ void Simulation::DrawDensity() noexcept
 
 void Simulation::DrawPressure() noexcept
 {
+
+    ImGui::Begin( " Debug Params " );
+
+    ImGui::Separator();
+    ImGui::SliderFloat( "Debug field max", &m_DebugFieldMax, 0.0f, 50.0f );
+    ImGui::SliderFloat( "Debug field min", &m_DebugFieldMin, -50.0f, 0.0f );
+    ImGui::SliderFloat( "Debug field middle", &m_DebugFieldMiddle, m_DebugFieldMin, m_DebugFieldMax );
+
+    ImGui::End();
 
     // How does each pixel location map to the world?
     float cellToWorld = m_SimulationResolution / m_DebugFieldResolution;
