@@ -17,6 +17,31 @@ enum class UpdateScheme : uint8_t
 
 //-------------------------------------------------------------------------
 
+struct PhysicsSettings
+{
+    //-------------------------------------------------------------------------
+
+    uint32_t TargetFPS{ 60 };
+    float    DeltaTime{ 1.0f / TargetFPS };
+    bool     Paused{ true };
+
+    //-------------------------------------------------------------------------
+
+    float        SimulationResolution{ 10.0f }; // X and Y are same scale...
+    uint32_t     ParticleCount{ 2000 };
+    UpdateScheme Scheme{ UpdateScheme::Implicit };
+
+    //-------------------------------------------------------------------------
+
+    float TargetDensity{ ParticleCount / SimulationResolution / SimulationResolution / 1.3f };
+    float SmoothingRadius{ 2 * std::sqrt( SimulationResolution * SimulationResolution / ( ParticleCount ) ) };
+    float PressureMultiplier{ 10000.0f / ParticleCount };
+
+    //-------------------------------------------------------------------------
+};
+
+//-------------------------------------------------------------------------
+
 class Simulation
 {
 
@@ -52,6 +77,8 @@ private:
 
     void Render() noexcept;
 
+    void DrawPhysicsOverlayer() noexcept;
+
     //-------------------------------------------------------------------------
 
     // Utilities:
@@ -82,25 +109,7 @@ private:
 
 private:
 
-    // Simulation settings:
-    //-------------------------------------------------------------------------
-
-    // Delta time stuff
-    uint32_t m_TargetFPS{ 60 };
-    float    m_DeltaTime{ 1.0f / m_TargetFPS };
-
-    // Simulation size stuff
-    float    m_SimulationResolution{ 10.0f }; // X and Y are same scale...
-    uint32_t m_ParticleCount{ 4000 };
-
-    // Particle param stuff
-    float m_Masses{ 1.0f };
-    float m_TargetDensity{ m_ParticleCount / m_SimulationResolution / m_SimulationResolution / 1.3f };                 // Trial and error.
-    float m_SmoothingRadius{ 2 * std::sqrt( m_SimulationResolution * m_SimulationResolution / ( m_ParticleCount ) ) }; // Trial and error.
-    float m_PressureMultiplier{ 10000.0f / m_ParticleCount };
-
-    UpdateScheme m_UpdateScheme{ UpdateScheme::Implicit };
-    bool         m_Paused{ true };
+    PhysicsSettings m_PhysicsSettings{};
 
     // Window settings:
     //-------------------------------------------------------------------------
@@ -137,6 +146,7 @@ private:
 
     std::vector<Vector2> m_Positions;
     std::vector<Vector2> m_Velocities;
+    float                m_Masses{ 1.0f };
 
     // The variant values, calculated based on the particles.
     // Note: The position for the i'th value is m_Positions[i].

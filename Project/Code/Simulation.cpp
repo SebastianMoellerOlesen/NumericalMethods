@@ -26,7 +26,7 @@ Simulation::Simulation( uint32_t size )
 
     SetConfigFlags( FLAG_WINDOW_HIGHDPI );
     InitWindow( size, size, "Simulation" );
-    SetTargetFPS( m_TargetFPS );
+    SetTargetFPS( m_PhysicsSettings.TargetFPS ); // Debatable if it should be in the physics settings...
 
     BeginDrawing();
     EndDrawing();
@@ -46,8 +46,8 @@ Simulation::Simulation( uint32_t size )
     //-------------------------------------------------------------------------
 
     // Assign the points for the BC
-    m_BorderP1.insert( m_BorderP1.begin(), { { 0, 0 }, { m_SimulationResolution, 0 }, { m_SimulationResolution, m_SimulationResolution }, { 0, m_SimulationResolution } } );
-    m_BorderP2.insert( m_BorderP2.begin(), { { m_SimulationResolution, 0 }, { m_SimulationResolution, m_SimulationResolution }, { 0, m_SimulationResolution }, { 0, 0 } } );
+    m_BorderP1.insert( m_BorderP1.begin(), { { 0, 0 }, { m_PhysicsSettings.SimulationResolution, 0 }, { m_PhysicsSettings.SimulationResolution, m_PhysicsSettings.SimulationResolution }, { 0, m_PhysicsSettings.SimulationResolution } } );
+    m_BorderP2.insert( m_BorderP2.begin(), { { m_PhysicsSettings.SimulationResolution, 0 }, { m_PhysicsSettings.SimulationResolution, m_PhysicsSettings.SimulationResolution }, { 0, m_PhysicsSettings.SimulationResolution }, { 0, 0 } } );
 
     //-------------------------------------------------------------------------
 
@@ -56,12 +56,12 @@ Simulation::Simulation( uint32_t size )
     //-------------------------------------------------------------------------
 
     // Generate a random initial position.
-    for ( uint32_t i = 0; i < m_ParticleCount; i++ )
+    for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
     {
         // Position
         float x = GetRandomValue( 0.0f, m_RenderResolution );
         float y = GetRandomValue( 0.0f, m_RenderResolution );
-        m_Positions.push_back( Vector2( x, y ) / m_RenderResolution * m_SimulationResolution );
+        m_Positions.push_back( Vector2( x, y ) / m_RenderResolution * m_PhysicsSettings.SimulationResolution );
 
         //-------------------------------------------------------------------------
 
@@ -83,13 +83,13 @@ Simulation::Simulation( uint32_t size )
     }
 
     // Initialize the fields.
-    m_Densities.resize( m_ParticleCount );
+    m_Densities.resize( m_PhysicsSettings.ParticleCount );
     UpdateDensities();
 
-    m_Pressures.resize( m_ParticleCount );
+    m_Pressures.resize( m_PhysicsSettings.ParticleCount );
     UpdatePressures();
 
-    m_PressureGradiants.resize( m_ParticleCount );
+    m_PressureGradiants.resize( m_PhysicsSettings.ParticleCount );
     UpdatePressureGradiant();
 
     // Create the debug texture:
@@ -115,7 +115,7 @@ Simulation::~Simulation()
 
 Vector2 Simulation::WorldSpaceToScreenSpace( Vector2 WS ) noexcept
 {
-    return Vector2Scale( WS, m_RenderResolution / m_SimulationResolution );
+    return Vector2Scale( WS, m_RenderResolution / m_PhysicsSettings.SimulationResolution );
 }
 
 //-------------------------------------------------------------------------
@@ -131,12 +131,12 @@ void Simulation::Run() noexcept
 
 void Simulation::Restart() noexcept
 {
-    for ( uint32_t i = 0; i < m_ParticleCount; i++ )
+    for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
     {
         // Position
         float x        = GetRandomValue( 0.0f, m_RenderResolution );
         float y        = GetRandomValue( 0.0f, m_RenderResolution );
-        m_Positions[i] = Vector2( x, y ) / m_RenderResolution * m_SimulationResolution;
+        m_Positions[i] = Vector2( x, y ) / m_RenderResolution * m_PhysicsSettings.SimulationResolution;
 
         //-------------------------------------------------------------------------
 
@@ -154,31 +154,31 @@ void Simulation::Restart() noexcept
     }
 
     // Initialize the fields.
-    m_Densities.resize( m_ParticleCount );
+    m_Densities.resize( m_PhysicsSettings.ParticleCount );
     UpdateDensities();
 
-    m_Pressures.resize( m_ParticleCount );
+    m_Pressures.resize( m_PhysicsSettings.ParticleCount );
     UpdatePressures();
 
-    m_PressureGradiants.resize( m_ParticleCount );
+    m_PressureGradiants.resize( m_PhysicsSettings.ParticleCount );
     UpdatePressureGradiant();
 }
 
 //-------------------------------------------------------------------------
 
-void Simulation::SetScheme( UpdateScheme scheme ) noexcept { m_UpdateScheme = scheme; }
+void Simulation::SetScheme( UpdateScheme scheme ) noexcept { m_PhysicsSettings.Scheme = scheme; }
 
 void Simulation::Update() noexcept
 {
 
-    if ( m_Paused )
+    if ( m_PhysicsSettings.Paused )
     {
         return;
     }
 
     //-------------------------------------------------------------------------
 
-    switch ( m_UpdateScheme )
+    switch ( m_PhysicsSettings.Scheme )
     {
         case UpdateScheme::Explicit:
             ExplicitUpdate();
@@ -203,7 +203,7 @@ void Simulation::ImplicitUpdate() noexcept
 
     for ( uint32_t i = 0; i < m_Positions.size(); i++ )
     {
-        m_Positions[i] += m_Velocities[i] * m_DeltaTime;
+        m_Positions[i] += m_Velocities[i] * m_PhysicsSettings.DeltaTime;
     }
 
     //-------------------------------------------------------------------------
@@ -222,8 +222,8 @@ void Simulation::ImplicitUpdate() noexcept
 
     for ( uint32_t i = 0; i < m_Positions.size(); i++ )
     {
-        m_Velocities[i] += m_PressureGradiants[i] / m_Densities[i] * m_DeltaTime;
-        m_Positions[i]  += m_Velocities[i] * m_DeltaTime;
+        m_Velocities[i] += m_PressureGradiants[i] / m_Densities[i] * m_PhysicsSettings.DeltaTime;
+        m_Positions[i]  += m_Velocities[i] * m_PhysicsSettings.DeltaTime;
     }
 
     //-------------------------------------------------------------------------
@@ -246,8 +246,8 @@ void Simulation::ExplicitUpdate() noexcept
 
     for ( uint32_t i = 0; i < m_Positions.size(); i++ )
     {
-        m_Velocities[i] += m_PressureGradiants[i] / m_Densities[i] * m_DeltaTime;
-        m_Positions[i]  += m_Velocities[i] * m_DeltaTime;
+        m_Velocities[i] += m_PressureGradiants[i] / m_Densities[i] * m_PhysicsSettings.DeltaTime;
+        m_Positions[i]  += m_Velocities[i] * m_PhysicsSettings.DeltaTime;
     }
 
     //-------------------------------------------------------------------------
@@ -291,10 +291,10 @@ float Simulation::CalculateDensity( Vector2 location ) noexcept
 {
     float density = 0;
 
-    for ( uint32_t i = 0; i < m_ParticleCount; i++ )
+    for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
     {
         float distance   = Vector2Length( location - m_Positions[i] );
-        float influence  = SimpleSmoothingKernal2D( m_SmoothingRadius, distance );
+        float influence  = SimpleSmoothingKernal2D( m_PhysicsSettings.SmoothingRadius, distance );
         density         += m_Masses * influence;
     }
 
@@ -315,7 +315,7 @@ void Simulation::UpdateDensities() noexcept
     //-------------------------------------------------------------------------
 
     std::vector<float> newDensities;
-    newDensities.resize( m_ParticleCount );
+    newDensities.resize( m_PhysicsSettings.ParticleCount );
 
     //-------------------------------------------------------------------------
 
@@ -339,14 +339,14 @@ void Simulation::UpdateDensities() noexcept
 
 float Simulation::CalculatePressure( Vector2 location ) noexcept
 {
-    float difference = CalculateDensity( location ) - m_TargetDensity;
-    return difference * m_PressureMultiplier;
+    float difference = CalculateDensity( location ) - m_PhysicsSettings.TargetDensity;
+    return difference * m_PhysicsSettings.PressureMultiplier;
 }
 
 float Simulation::CalculatePressure( uint32_t index ) noexcept
 {
-    float difference = m_Densities[index] - m_TargetDensity;
-    return difference * m_PressureMultiplier;
+    float difference = m_Densities[index] - m_PhysicsSettings.TargetDensity;
+    return difference * m_PhysicsSettings.PressureMultiplier;
 }
 
 //-------------------------------------------------------------------------
@@ -373,7 +373,7 @@ Vector2 Simulation ::CalculatePressureGradiant( Vector2 location ) noexcept
 {
     Vector2 gradient = Vector2Zero();
 
-    for ( uint32_t i = 0; i < m_ParticleCount; i++ )
+    for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
     {
         Vector2 difference = location - m_Positions[i];
         float   distance   = Vector2Length( difference );
@@ -387,7 +387,7 @@ Vector2 Simulation ::CalculatePressureGradiant( Vector2 location ) noexcept
             difference = GetRandomDir();
         }
 
-        float influence  = SimpleSmoothingKernal2D( m_SmoothingRadius, distance );
+        float influence  = SimpleSmoothingKernal2D( m_PhysicsSettings.SmoothingRadius, distance );
         gradient        += Vector2Normalize( difference ) * m_Masses * influence * m_Pressures[i] / m_Densities[i];
     }
 
@@ -402,7 +402,7 @@ Vector2 Simulation::CalculatePressureGradiant( uint32_t index ) noexcept
 
     //-------------------------------------------------------------------------
 
-    for ( uint32_t i = 0; i < m_ParticleCount; i++ )
+    for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
     {
 
         //-------------------------------------------------------------------------
@@ -427,7 +427,7 @@ Vector2 Simulation::CalculatePressureGradiant( uint32_t index ) noexcept
 
         //-------------------------------------------------------------------------
 
-        float influence       = SimpleSmoothinKernalDerivative2D( m_SmoothingRadius, distance );
+        float influence       = SimpleSmoothinKernalDerivative2D( m_PhysicsSettings.SmoothingRadius, distance );
         float averageDensity  = ( m_Densities[i] + m_Densities[index] ) * 0.5f;
         gradient             -= Vector2Normalize( difference ) * m_Masses * influence * m_Pressures[i] / averageDensity;
 
@@ -474,34 +474,7 @@ void Simulation::Render() noexcept
 
     //-------------------------------------------------------------------------
 
-    ImGui::Begin( "Parameters" );
-    ImGui::Checkbox( "Pause simulation", &m_Paused );
-
-    if ( ImGui::Button( " Restart Simulation " ) )
-    {
-        Restart();
-    }
-
-    ImGui::Separator();
-
-    ImGui::Text( "Integration Scheme:" );
-    if ( ImGui::Button( " Explicit " ) )
-    {
-        SetScheme( UpdateScheme::Explicit );
-    }
-    ImGui::SameLine();
-    if ( ImGui::Button( " Implicit " ) )
-    {
-        SetScheme( UpdateScheme::Implicit );
-    }
-
-    ImGui::Separator();
-    ImGui::SliderFloat( "Smoothing radius", &m_SmoothingRadius, 0.01f, 2.0f );
-    ImGui::SliderFloat( "Pressure Multiplier", &m_PressureMultiplier, 0.0f, 10.0f );
-    ImGui::SliderFloat( "Target Density", &m_TargetDensity, 0.0f, 20.0f );
-    ImGui::Separator();
-    ImGui::Text( "%.1f FPS", static_cast<double>( GetFPS() ) );
-    ImGui::End();
+    DrawPhysicsOverlayer();
 
     //-------------------------------------------------------------------------
 
@@ -522,7 +495,7 @@ void Simulation::DrawDensity() noexcept
     ImGui::End();
 
     // How does each pixel location map to the world?
-    float cellToWorld = m_SimulationResolution / m_DebugFieldResolution;
+    float cellToWorld = m_PhysicsSettings.SimulationResolution / m_DebugFieldResolution;
 
     std::for_each( std::execution::par_unseq, m_DebugPixels.begin(), m_DebugPixels.end(),
                    [this, cellToWorld]( Color& pixel ) {
@@ -567,7 +540,7 @@ void Simulation::DrawPressure() noexcept
     ImGui::End();
 
     // How does each pixel location map to the world?
-    float cellToWorld = m_SimulationResolution / m_DebugFieldResolution;
+    float cellToWorld = m_PhysicsSettings.SimulationResolution / m_DebugFieldResolution;
 
     std::for_each( std::execution::par_unseq, m_DebugPixels.begin(), m_DebugPixels.end(),
                    [this, cellToWorld]( Color& pixel ) {
@@ -607,3 +580,48 @@ void Simulation::DrawPressure() noexcept
     DrawTexturePro( m_DebugTexture, { 0, 0, static_cast<float>( m_DebugFieldResolution ), static_cast<float>( m_DebugFieldResolution ) },
                     { 0, 0, static_cast<float>( m_RenderResolution ), static_cast<float>( m_RenderResolution ) }, { 0, 0 }, 0, WHITE );
 }
+
+//-------------------------------------------------------------------------
+
+// It is assumed that rlImGuiBegin() and rlImGuiEnd() are called outside this scope.;
+void Simulation::DrawPhysicsOverlayer() noexcept
+{
+
+    //-------------------------------------------------------------------------
+
+    ImGui::Begin( " Physics Settigns " );
+
+    //-------------------------------------------------------------------------
+
+    ImGui::Text( "%.1f FPS", static_cast<double>( GetFPS() ) );
+    ImGui::Checkbox( "Pause", &m_PhysicsSettings.Paused );
+    ImGui::SameLine();
+    if ( ImGui::Button( "Restart" ) ) { Restart(); }
+
+    //-------------------------------------------------------------------------
+
+    ImGui::Separator();
+
+    //-------------------------------------------------------------------------
+
+    ImGui::Text( "Scheme" );
+
+    if ( ImGui::Button( " Explicit " ) ) { SetScheme( UpdateScheme::Explicit ); }
+    ImGui::SameLine();
+    if ( ImGui::Button( " Implicit " ) ) { SetScheme( UpdateScheme::Implicit ); }
+
+    //-------------------------------------------------------------------------
+
+    ImGui::Separator();
+
+    //-------------------------------------------------------------------------
+
+    ImGui::Text( "Parameters" );
+
+    ImGui::SliderFloat( "Smoothing radius", &m_PhysicsSettings.SmoothingRadius, 0.01f, 2.0f );
+    ImGui::SliderFloat( "Pressure Multiplier", &m_PhysicsSettings.PressureMultiplier, 0.0f, 10.0f );
+    ImGui::SliderFloat( "Target Density", &m_PhysicsSettings.TargetDensity, 0.0f, 20.0f );
+    ImGui::End();
+}
+
+//-------------------------------------------------------------------------
