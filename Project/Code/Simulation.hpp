@@ -29,7 +29,7 @@ struct PhysicsSettings
     //-------------------------------------------------------------------------
 
     float        SimulationResolution{ 10.0f }; // X and Y are same scale...
-    uint32_t     ParticleCount{ 2000 };
+    uint32_t     ParticleCount{ 10000 };
     UpdateScheme Scheme{ UpdateScheme::Implicit };
 
     //-------------------------------------------------------------------------
