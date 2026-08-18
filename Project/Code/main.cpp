@@ -4,6 +4,6 @@
 
 int main()
 {
-    Simulation sim{ 1000 };
+    SandboxSimulation sim{ 1000 };
     sim.Run();
 }

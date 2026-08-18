@@ -2,7 +2,6 @@
 #include "SmoothingKernals.hpp"
 #include "Utils.hpp"
 
-#include <cmath>
 #include <raylib.h>
 #include <raymath.h>
 #include <imgui.h>
@@ -10,6 +9,7 @@
 #include <rlgl.h>
 #include <imgui_impl_raylib.h>
 
+#include <cmath>
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -22,7 +22,7 @@
 
 //-------------------------------------------------------------------------
 
-Simulation::Simulation( uint32_t size )
+SandboxSimulation::SandboxSimulation( uint32_t size )
 {
 
     //-------------------------------------------------------------------------
@@ -119,7 +119,7 @@ Simulation::Simulation( uint32_t size )
     SetTextureFilter( m_DebugSettings.DebugTexture, TEXTURE_FILTER_BILINEAR );
 }
 
-Simulation::~Simulation()
+SandboxSimulation::~SandboxSimulation()
 {
     UnloadTexture( m_DebugSettings.DebugTexture );
     rlImGuiShutdown();
@@ -128,14 +128,14 @@ Simulation::~Simulation()
 
 //-------------------------------------------------------------------------
 
-Vector2 Simulation::WorldSpaceToScreenSpace( Vector2 WS ) noexcept
+Vector2 SandboxSimulation::WorldSpaceToScreenSpace( Vector2 WS ) noexcept
 {
     return Vector2Scale( WS, m_DebugSettings.RenderResolution / m_PhysicsSettings.SimulationResolution );
 }
 
 //-------------------------------------------------------------------------
 
-int32_t Simulation::GetGridIndex( Vector2 pos ) noexcept
+int32_t SandboxSimulation::GetGridIndex( Vector2 pos ) noexcept
 {
     pos        /= m_PhysicsSettings.SmoothingRadius;
     uint32_t x  = pos.x; // Should floor, if bugs, mabey this is rounding...
@@ -145,7 +145,7 @@ int32_t Simulation::GetGridIndex( Vector2 pos ) noexcept
 
 //-------------------------------------------------------------------------
 
-void Simulation::UpdateGridIndices() noexcept
+void SandboxSimulation::UpdateGridIndices() noexcept
 {
 
     //-------------------------------------------------------------------------
@@ -199,7 +199,7 @@ void Simulation::UpdateGridIndices() noexcept
 
 //-------------------------------------------------------------------------
 
-std::vector<int32_t> Simulation::GetNeighbourCells( int32_t i ) noexcept
+std::vector<int32_t> SandboxSimulation::GetNeighbourCells( int32_t i ) noexcept
 {
 
     //-------------------------------------------------------------------------
@@ -240,7 +240,7 @@ std::vector<int32_t> Simulation::GetNeighbourCells( int32_t i ) noexcept
 
 //-------------------------------------------------------------------------
 
-std::span<int32_t> Simulation::GetParticlesInCell( int32_t i ) noexcept
+std::span<int32_t> SandboxSimulation::GetParticlesInCell( int32_t i ) noexcept
 {
     // Bounds checking
     if ( i < 0 || i >= m_CellStart.size() - 1 )
@@ -251,7 +251,7 @@ std::span<int32_t> Simulation::GetParticlesInCell( int32_t i ) noexcept
 }
 
 //-------------------------------------------------------------------------
-void Simulation::Run() noexcept
+void SandboxSimulation::Run() noexcept
 {
     while ( !WindowShouldClose() )
     {
@@ -275,7 +275,7 @@ void Simulation::Run() noexcept
     }
 }
 
-void Simulation::Restart() noexcept
+void SandboxSimulation::Restart() noexcept
 {
     for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
     {
@@ -312,9 +312,9 @@ void Simulation::Restart() noexcept
 
 //-------------------------------------------------------------------------
 
-void Simulation::SetScheme( UpdateScheme scheme ) noexcept { m_PhysicsSettings.Scheme = scheme; }
+void SandboxSimulation::SetScheme( UpdateScheme scheme ) noexcept { m_PhysicsSettings.Scheme = scheme; }
 
-void Simulation::Update( float timestep ) noexcept
+void SandboxSimulation::Update( float timestep ) noexcept
 {
 
     if ( m_PhysicsSettings.Paused )
@@ -336,7 +336,7 @@ void Simulation::Update( float timestep ) noexcept
     }
 }
 
-void Simulation::ImplicitUpdate( float timestep ) noexcept
+void SandboxSimulation::ImplicitUpdate( float timestep ) noexcept
 {
 
     //-------------------------------------------------------------------------
@@ -427,7 +427,7 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
     HandleBorderCollision();
 }
 
-void Simulation::ExplicitUpdate( float timestep ) noexcept
+void SandboxSimulation::ExplicitUpdate( float timestep ) noexcept
 {
 
     //-------------------------------------------------------------------------
@@ -492,7 +492,7 @@ void Simulation::ExplicitUpdate( float timestep ) noexcept
 
 //-------------------------------------------------------------------------
 
-void Simulation::HandleBorderCollision() noexcept
+void SandboxSimulation::HandleBorderCollision() noexcept
 {
     for ( uint32_t i = 0; i < m_Positions.size(); i++ )
     {
@@ -520,7 +520,7 @@ void Simulation::HandleBorderCollision() noexcept
 
 //-------------------------------------------------------------------------
 
-float Simulation::CalculateDensity( Vector2 location ) noexcept
+float SandboxSimulation::CalculateDensity( Vector2 location ) noexcept
 {
 
     int32_t index            = GetGridIndex( location );
@@ -540,7 +540,7 @@ float Simulation::CalculateDensity( Vector2 location ) noexcept
 
 //-------------------------------------------------------------------------
 
-void Simulation::UpdateDensities() noexcept
+void SandboxSimulation::UpdateDensities() noexcept
 {
 
     //-------------------------------------------------------------------------
@@ -574,13 +574,13 @@ void Simulation::UpdateDensities() noexcept
 
 //-------------------------------------------------------------------------
 
-float Simulation::CalculatePressure( Vector2 location ) noexcept
+float SandboxSimulation::CalculatePressure( Vector2 location ) noexcept
 {
     float difference = CalculateDensity( location ) - m_PhysicsSettings.TargetDensity;
     return difference * m_PhysicsSettings.PressureMultiplier;
 }
 
-float Simulation::CalculatePressure( uint32_t index ) noexcept
+float SandboxSimulation::CalculatePressure( uint32_t index ) noexcept
 {
     float difference = m_Densities[index] - m_PhysicsSettings.TargetDensity;
     return difference * m_PhysicsSettings.PressureMultiplier;
@@ -588,7 +588,7 @@ float Simulation::CalculatePressure( uint32_t index ) noexcept
 
 //-------------------------------------------------------------------------
 
-void Simulation::UpdatePressures() noexcept
+void SandboxSimulation::UpdatePressures() noexcept
 {
     // No need to update them all at once, since we don't use the pressures, but the densities to calculate the pressure.
     std::for_each( std::execution::par_unseq, m_Pressures.begin(), m_Pressures.end(),
@@ -600,7 +600,7 @@ void Simulation::UpdatePressures() noexcept
 
 //-------------------------------------------------------------------------
 
-void Simulation::UpdatePressureGradiant() noexcept
+void SandboxSimulation::UpdatePressureGradiant() noexcept
 {
     std::for_each( std::execution::par_unseq, m_Positions.begin(), m_Positions.end(), [this]( const Vector2& pos ) {
         size_t i                     = &pos - m_Positions.data();
@@ -610,7 +610,7 @@ void Simulation::UpdatePressureGradiant() noexcept
 
 //-------------------------------------------------------------------------
 
-Vector2 Simulation ::CalculatePressureGradiant( Vector2 location ) noexcept
+Vector2 SandboxSimulation ::CalculatePressureGradiant( Vector2 location ) noexcept
 {
 
     //-------------------------------------------------------------------------
@@ -647,7 +647,7 @@ Vector2 Simulation ::CalculatePressureGradiant( Vector2 location ) noexcept
     return gradient;
 }
 
-Vector2 Simulation::CalculatePressureGradiant( uint32_t index ) noexcept
+Vector2 SandboxSimulation::CalculatePressureGradiant( uint32_t index ) noexcept
 {
     //-------------------------------------------------------------------------
 
@@ -702,7 +702,7 @@ Vector2 Simulation::CalculatePressureGradiant( uint32_t index ) noexcept
 
 //-------------------------------------------------------------------------
 
-Vector2 Simulation::CalculateViscocityForce( uint32_t index ) noexcept
+Vector2 SandboxSimulation::CalculateViscocityForce( uint32_t index ) noexcept
 {
 
     int32_t cell             = GetGridIndex( m_Positions[index] );
@@ -740,7 +740,7 @@ Vector2 Simulation::CalculateViscocityForce( uint32_t index ) noexcept
     return force;
 }
 
-void Simulation::ApplyViscocity( float timestep ) noexcept
+void SandboxSimulation::ApplyViscocity( float timestep ) noexcept
 {
     std::for_each( std::execution::par_unseq, m_SortedParticles.begin(), m_SortedParticles.end(), [this, &timestep]( const int32_t& idx ) {
         Vector2 force      = CalculateViscocityForce( idx );
@@ -750,7 +750,7 @@ void Simulation::ApplyViscocity( float timestep ) noexcept
 
 //-------------------------------------------------------------------------
 
-void Simulation::Render() noexcept
+void SandboxSimulation::Render() noexcept
 {
 
     //-------------------------------------------------------------------------
@@ -760,7 +760,7 @@ void Simulation::Render() noexcept
 
     //-------------------------------------------------------------------------
 
-    ClearBackground( GRAY );
+    ClearBackground( DARKGRAY );
 
     switch ( m_DebugSettings.Field )
     {
@@ -782,7 +782,7 @@ void Simulation::Render() noexcept
     {
         for ( uint32_t i = 0; i < m_BorderP1.size(); i++ )
         {
-            DrawLineEx( WorldSpaceToScreenSpace( m_BorderP1[i] ), WorldSpaceToScreenSpace( m_BorderP2[i] ), 3.0f, BLACK );
+            DrawLineEx( WorldSpaceToScreenSpace( m_BorderP1[i] ), WorldSpaceToScreenSpace( m_BorderP2[i] ), 6.0f, BLACK );
         }
 
         //-------------------------------------------------------------------------
@@ -809,7 +809,7 @@ void Simulation::Render() noexcept
 
 //-------------------------------------------------------------------------
 
-void Simulation::DrawDensity() noexcept
+void SandboxSimulation::DrawDensity() noexcept
 {
 
     // How does each pixel location map to the world?
@@ -845,7 +845,7 @@ void Simulation::DrawDensity() noexcept
                     { 0, 0, static_cast<float>( m_DebugSettings.RenderResolution ), static_cast<float>( m_DebugSettings.RenderResolution ) }, { 0, 0 }, 0, WHITE );
 }
 
-void Simulation::DrawPressure() noexcept
+void SandboxSimulation::DrawPressure() noexcept
 {
 
     // How does each pixel location map to the world?
@@ -893,7 +893,7 @@ void Simulation::DrawPressure() noexcept
 //-------------------------------------------------------------------------
 
 // It is assumed that rlImGuiBegin() and rlImGuiEnd() are called outside this scope.;
-void Simulation::DrawPhysicsOverlay() noexcept
+void SandboxSimulation::DrawPhysicsOverlay() noexcept
 {
 
     //-------------------------------------------------------------------------
@@ -950,7 +950,7 @@ void Simulation::DrawPhysicsOverlay() noexcept
     ImGui::End();
 }
 
-void Simulation::DrawDebugOverlay() noexcept
+void SandboxSimulation::DrawDebugOverlay() noexcept
 {
 
     ImGui::Begin( "Debug Settings" );
