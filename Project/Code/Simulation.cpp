@@ -264,7 +264,7 @@ void Simulation::Run() noexcept
 
         m_PhysicsSettings.RestTime += m_PhysicsSettings.FrameTime;
 
-        float timestep = m_PhysicsSettings.SmoothingRadius / std::sqrt( m_PhysicsSettings.PressureMultiplier ) / 2.0f;
+        float timestep = m_PhysicsSettings.SmoothingRadius / std::sqrt( m_PhysicsSettings.PressureMultiplier ) / m_PhysicsSettings.InvTimestepMultiplier;
         timestep       = timestep > m_PhysicsSettings.FrameTime ? m_PhysicsSettings.FrameTime : timestep;
 
         while ( m_PhysicsSettings.RestTime >= timestep )
@@ -906,6 +906,7 @@ void Simulation::DrawPhysicsOverlay() noexcept
     ImGui::Checkbox( "Pause", &m_PhysicsSettings.Paused );
     ImGui::SameLine();
     if ( ImGui::Button( "Restart" ) ) { Restart(); }
+    ImGui::SliderFloat( " InvTimestepMultiplier ", &m_PhysicsSettings.InvTimestepMultiplier, 1.0f, 10.0f );
 
     //-------------------------------------------------------------------------
 

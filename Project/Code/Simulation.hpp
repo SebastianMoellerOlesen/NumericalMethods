@@ -25,6 +25,7 @@ struct PhysicsSettings
     uint32_t TargetFPS{ 60 };
     float    RestTime;
     float    FrameTime{ 1.0f / TargetFPS };
+    float    InvTimestepMultiplier{ 2.0f };
     bool     Paused{ true };
 
     //-------------------------------------------------------------------------
