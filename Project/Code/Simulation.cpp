@@ -2,8 +2,6 @@
 #include "SmoothingKernals.hpp"
 #include "Utils.hpp"
 
-#include <iostream>
-#include <numeric>
 #include <raylib.h>
 #include <raymath.h>
 #include <imgui.h>
@@ -92,6 +90,10 @@ Simulation::Simulation( uint32_t size )
     // Initilize the boxes.
     m_GridIndices.resize( m_PhysicsSettings.ParticleCount );
     UpdateGridIndices();
+
+    //-------------------------------------------------------------------------
+
+    UpdateAirfoil();
 
     //-------------------------------------------------------------------------
 
@@ -217,7 +219,6 @@ void Simulation::UpdateGridIndices() noexcept
     // uint32_t cellCount = m_GridAxisSize * m_GridAxisSize;
 
     uint32_t cellCount = m_CellCount;
-    std::cout << cellCount << std::endl;
 
     //-------------------------------------------------------------------------
 
@@ -372,6 +373,87 @@ void Simulation::Restart() noexcept
     UpdatePressureGradiant();
 }
 
+void Simulation::InitSandbox( /* Change this to take a bool, on whether or not to reset settings */ ) noexcept
+{
+    //-------------------------------------------------------------------------
+
+    m_PhysicsSettings.ApplyPressureForce = false;
+    m_PhysicsSettings.ApplyViscocity     = false;
+    m_PhysicsSettings.ApplyGravity       = false;
+    m_PhysicsSettings.ApplyMouseForce    = false;
+
+    //-------------------------------------------------------------------------
+
+    m_PhysicsSettings.Paused                = true;
+    m_PhysicsSettings.ParticleCount         = 2000;
+    m_PhysicsSettings.SmoothingRadius       = 0.35;
+    m_PhysicsSettings.InvTimestepMultiplier = 2.0f;
+    m_PhysicsSettings.GravityMultiplier     = 5.0f;
+    m_PhysicsSettings.TargetDensity         = 15.0f;
+    m_PhysicsSettings.PressureMultiplier    = 100.0f;
+    m_PhysicsSettings.Viscocity             = 0.01f;
+    m_PhysicsSettings.Scheme                = UpdateScheme::Implicit;
+
+    //-------------------------------------------------------------------------
+
+    m_DebugSettings.Draw               = true;
+    m_DebugSettings.ParticleDrawRadius = 5.0f;
+
+    m_DebugSettings.Field            = DebugField::Density;
+    m_DebugSettings.DebugFieldMiddle = 10.0f;
+    m_DebugSettings.DebugFieldMax    = 30.0f;
+
+    //-------------------------------------------------------------------------
+
+    uint32_t particleCount = m_PhysicsSettings.ParticleCount;
+    m_Positions.resize( particleCount );
+    m_Velocities.resize( particleCount );
+    m_ParticleColors.assign( particleCount, BLUE );
+
+    //-------------------------------------------------------------------------
+
+    // For the sandbox, we initialilze the particles randomly, without velocity.
+    for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
+    {
+        // Position
+        float x        = GetRandomValue( 0.0f, m_DebugSettings.RenderResolution );
+        float y        = GetRandomValue( 0.0f, m_DebugSettings.RenderResolution );
+        m_Positions[i] = Vector2( x, y ) / m_DebugSettings.RenderResolution * m_PhysicsSettings.SimulationResolution;
+
+        //-------------------------------------------------------------------------
+
+        float dx = 0.0f;
+        float dy = 0.0f;
+
+        m_Velocities[i] = Vector2( dx, dy );
+
+        //-------------------------------------------------------------------------
+    }
+
+    //-------------------------------------------------------------------------
+
+    // Initialize the fields.
+    m_Densities.resize( m_PhysicsSettings.ParticleCount );
+    UpdateDensities();
+
+    m_Pressures.resize( m_PhysicsSettings.ParticleCount );
+    UpdatePressures();
+
+    m_PressureGradiants.resize( m_PhysicsSettings.ParticleCount );
+    UpdatePressureGradiant();
+
+    // Avoid the density only being drawn, when we unpause...
+    DrawDensity();
+
+    //-------------------------------------------------------------------------
+
+    // Update the borders, so they are as they should be:
+    m_BorderP1.resize( 0 );
+    m_BorderP2.resize( 0 );
+    m_BorderP1.insert( m_BorderP1.begin(), { { 0, 0 }, { m_PhysicsSettings.SimulationResolution, 0 }, { m_PhysicsSettings.SimulationResolution, m_PhysicsSettings.SimulationResolution }, { 0, m_PhysicsSettings.SimulationResolution } } );
+    m_BorderP2.insert( m_BorderP2.begin(), { { m_PhysicsSettings.SimulationResolution, 0 }, { m_PhysicsSettings.SimulationResolution, m_PhysicsSettings.SimulationResolution }, { 0, m_PhysicsSettings.SimulationResolution }, { 0, 0 } } );
+}
+
 //-------------------------------------------------------------------------
 
 void Simulation::SetScheme( UpdateScheme scheme ) noexcept { m_PhysicsSettings.Scheme = scheme; }
@@ -416,6 +498,7 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
     }
 
     HandleBoundary();
+
     //-------------------------------------------------------------------------
 
     // Update velocity implicitly.
@@ -571,6 +654,52 @@ void Simulation::HandleBoundary() noexcept
             float   offset = Vector2DotProduct( normal, P1 - m_Positions[i] );
 
             // If we are outside our box:
+            // Or inside, if the points are counter clockwise...
+            if ( offset > 0 )
+            {
+                pos += normal * offset;                                  // Reflect the travel
+                vel -= normal * Vector2DotProduct( vel, normal ) * 1.15; // Reflect the particle.
+            }
+        }
+
+        if ( m_AFEnabled )
+        {
+            // If we use the same method we did for the walls it won't work.
+            // That only works, if we want to be on the inside...
+            // So we need to find the edge we are closest to, and only use that as a comparison.
+
+            float    shortestDistance = INFINITY;
+            uint32_t shortestIdx      = 0;
+
+            for ( uint32_t k = 0; k < m_TransformedAirfoilP1.size(); k++ )
+            {
+                Vector2 P1 = m_TransformedAirfoilP1[k];
+                Vector2 P2 = m_TransformedAirfoilP2[k];
+
+                // We need to find the point on the edge, that is closest to the particle.
+                // We can't do as we did before, as we treat those as infinite lines.
+                Vector2 edge         = P2 - P1;
+                Vector2 closestPoint = P1 + edge * Clamp( Vector2DotProduct( pos - P1, edge ) / Vector2DotProduct( edge, edge ), 0.0f, 1.0f );
+
+                float distance = Vector2Distance( pos, closestPoint );
+
+                if ( distance < shortestDistance )
+                {
+                    shortestDistance = distance;
+                    shortestIdx      = k;
+                }
+            }
+
+            // Now we can do the response...
+            // This is the same as for the line now...
+            Vector2 P1 = m_TransformedAirfoilP1[shortestIdx];
+            Vector2 P2 = m_TransformedAirfoilP2[shortestIdx];
+
+            Vector2 normal = Vector2Normalize( Vector2Rotate( P2 - P1, PI / 2 ) );
+            float   offset = Vector2DotProduct( normal, P1 - m_Positions[i] );
+
+            // If we are outside our box:
+            // Or inside, if the points are counter clockwise...
             if ( offset > 0 )
             {
                 pos += normal * offset;                                  // Reflect the travel
@@ -812,10 +941,32 @@ void Simulation::ApplyViscocity( float timestep ) noexcept
 
 //-------------------------------------------------------------------------
 
+void Simulation::UpdateAirfoil() noexcept
+{
+    m_TransformedAirfoilP1.resize( AirfoilP1.size() );
+    m_TransformedAirfoilP2.resize( AirfoilP2.size() );
+
+    for ( uint32_t i = 0; i < AirfoilP1.size(); i++ )
+    {
+        Vector2 transformedP1 = Vector2Add( m_AFOffset, Vector2Rotate( Vector2Scale( AirfoilP1[i], m_AFScale ), m_AFRotation ) );
+        Vector2 transformedP2 = Vector2Add( m_AFOffset, Vector2Rotate( Vector2Scale( AirfoilP2[i], m_AFScale ), m_AFRotation ) );
+
+        m_TransformedAirfoilP1[i] = transformedP1;
+        m_TransformedAirfoilP2[i] = transformedP2;
+    }
+}
+
+//-------------------------------------------------------------------------
+
 void Simulation::Render() noexcept
 {
 
     //-------------------------------------------------------------------------
+
+    if ( m_AFEnabled )
+    {
+        UpdateAirfoil();
+    }
 
     BeginDrawing();
     rlImGuiBegin();
@@ -840,6 +991,11 @@ void Simulation::Render() noexcept
 
     //-------------------------------------------------------------------------
 
+    if ( m_AFEnabled )
+    {
+        for ( uint32_t i = 0; i < m_TransformedAirfoilP1.size(); i++ ) { DrawLineEx( WorldSpaceToScreenSpace( m_TransformedAirfoilP1[i] ), WorldSpaceToScreenSpace( m_TransformedAirfoilP2[i] ), 3.0f, BLACK ); }
+    }
+
     if ( m_DebugSettings.Draw )
     {
         for ( uint32_t i = 0; i < m_BorderP1.size(); i++ )
@@ -862,6 +1018,7 @@ void Simulation::Render() noexcept
 
     DrawPhysicsOverlay();
     DrawDebugOverlay();
+    DrawAirfoilOverlay();
 
     //-------------------------------------------------------------------------
 
@@ -967,7 +1124,7 @@ void Simulation::DrawPhysicsOverlay() noexcept
     ImGui::Text( "%.1f FPS", static_cast<double>( GetFPS() ) );
     ImGui::Checkbox( "Pause", &m_PhysicsSettings.Paused );
     ImGui::SameLine();
-    if ( ImGui::Button( "Restart" ) ) { Restart(); }
+    if ( ImGui::Button( "StartSandbox" ) ) { InitSandbox(); }
     ImGui::SliderFloat( " InvTimestepMultiplier ", &m_PhysicsSettings.InvTimestepMultiplier, 1.0f, 10.0f );
 
     //-------------------------------------------------------------------------
@@ -1044,6 +1201,20 @@ void Simulation::DrawDebugOverlay() noexcept
         ImGui::SliderFloat( "Debug field min", &m_DebugSettings.DebugFieldMin, -100.0f, 0.0f );
     }
 
+    ImGui::End();
+}
+
+void Simulation::DrawAirfoilOverlay() noexcept
+{
+    ImGui::Begin( "Airfoil" );
+    ImGui::Checkbox( " Enable Airfoil ", &m_AFEnabled );
+    if ( m_AFEnabled )
+    {
+        ImGui::SliderFloat( " Offset-X ", &m_AFOffset.x, 0.0f, m_PhysicsSettings.SimulationResolution );
+        ImGui::SliderFloat( " Offset-Y ", &m_AFOffset.y, 0.0f, m_PhysicsSettings.SimulationResolution );
+        ImGui::SliderFloat( " Scale ", &m_AFScale, 0.0f, 10.0f );
+        ImGui::SliderFloat( " Rotation ", &m_AFRotation, 0.0f, 2 * PI );
+    }
     ImGui::End();
 }
 

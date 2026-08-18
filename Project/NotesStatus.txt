@@ -35,3 +35,13 @@ For this, we could simply find the fastest particle at each timestep, and apply 
 I feel like i am in a good place RN, the next thing should be to add more of the forces into the simulation.
 After that, i might be fun to implement the RK4 method, and see how it compares.
 Then make some fun demoes i suppose!
+
+I want to create different instances, which i can just swap between, and reset.
+So now i want to create different init methods, i can just instantiate by using ImGui
+
+Should really give the mouse the ability to change ability:
+	Apply forces.
+	Spawn/Despawn particles.
+	Mabey more?
+
+I should really create more kernals, and test them...
