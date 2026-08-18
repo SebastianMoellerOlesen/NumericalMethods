@@ -22,7 +22,7 @@
 
 //-------------------------------------------------------------------------
 
-SandboxSimulation::SandboxSimulation( uint32_t size )
+Simulation::Simulation( uint32_t size )
 {
 
     //-------------------------------------------------------------------------
@@ -40,68 +40,11 @@ SandboxSimulation::SandboxSimulation( uint32_t size )
 
     //-------------------------------------------------------------------------
 
-    rlImGuiSetup( true );
+    rlImGuiSetup( true ); // Darkmode: true
 
     //-------------------------------------------------------------------------
 
     m_DebugSettings.RenderResolution = size;
-
-    //-------------------------------------------------------------------------
-
-    // Assign the points for the BC
-    m_BorderP1.insert( m_BorderP1.begin(), { { 0, 0 }, { m_PhysicsSettings.SimulationResolution, 0 }, { m_PhysicsSettings.SimulationResolution, m_PhysicsSettings.SimulationResolution }, { 0, m_PhysicsSettings.SimulationResolution } } );
-    m_BorderP2.insert( m_BorderP2.begin(), { { m_PhysicsSettings.SimulationResolution, 0 }, { m_PhysicsSettings.SimulationResolution, m_PhysicsSettings.SimulationResolution }, { 0, m_PhysicsSettings.SimulationResolution }, { 0, 0 } } );
-
-    //-------------------------------------------------------------------------
-
-    m_Masses = 1.0f;
-
-    //-------------------------------------------------------------------------
-
-    // Generate a random initial position.
-    for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
-    {
-        // Position
-        float x = GetRandomValue( 0.0f, m_DebugSettings.RenderResolution );
-        float y = GetRandomValue( 0.0f, m_DebugSettings.RenderResolution );
-        m_Positions.push_back( Vector2( x, y ) / m_DebugSettings.RenderResolution * m_PhysicsSettings.SimulationResolution );
-
-        //-------------------------------------------------------------------------
-
-        float dx = 0.0f;
-        float dy = 0.0f;
-
-        // Set a random velocity:
-        // float max = 5.0f;
-        // dx        = GetRandomValue( -max, max );
-        // dy        = GetRandomValue( -max, max );;
-
-        m_Velocities.push_back( Vector2( dx, dy ) );
-
-        //-------------------------------------------------------------------------
-
-        m_ParticleColors.push_back( BLUE );
-
-        //-------------------------------------------------------------------------
-    }
-
-    //-------------------------------------------------------------------------
-
-    // Initilize the boxes.
-    m_GridIndices.resize( m_PhysicsSettings.ParticleCount );
-    UpdateGridIndices();
-
-    //-------------------------------------------------------------------------
-
-    // Initialize the fields.
-    m_Densities.resize( m_PhysicsSettings.ParticleCount );
-    UpdateDensities();
-
-    m_Pressures.resize( m_PhysicsSettings.ParticleCount );
-    UpdatePressures();
-
-    m_PressureGradiants.resize( m_PhysicsSettings.ParticleCount );
-    UpdatePressureGradiant();
 
     //-------------------------------------------------------------------------
 
@@ -119,7 +62,7 @@ SandboxSimulation::SandboxSimulation( uint32_t size )
     SetTextureFilter( m_DebugSettings.DebugTexture, TEXTURE_FILTER_BILINEAR );
 }
 
-SandboxSimulation::~SandboxSimulation()
+Simulation::~Simulation()
 {
     UnloadTexture( m_DebugSettings.DebugTexture );
     rlImGuiShutdown();
@@ -128,33 +71,82 @@ SandboxSimulation::~SandboxSimulation()
 
 //-------------------------------------------------------------------------
 
-Vector2 SandboxSimulation::WorldSpaceToScreenSpace( Vector2 WS ) noexcept
+Vector2 Simulation::WorldSpaceToScreenSpace( Vector2 WS ) noexcept
 {
     return Vector2Scale( WS, m_DebugSettings.RenderResolution / m_PhysicsSettings.SimulationResolution );
 }
 
 //-------------------------------------------------------------------------
 
-int32_t SandboxSimulation::GetGridIndex( Vector2 pos ) noexcept
+void Simulation::UpdateGridDims() noexcept
 {
-    pos        /= m_PhysicsSettings.SmoothingRadius;
-    uint32_t x  = pos.x; // Should floor, if bugs, mabey this is rounding...
-    uint32_t y  = pos.y; // -| |-
-    return x + y * m_GridAxisSize;
+    float min_x = std::min_element( std::execution::par_unseq, m_Positions.begin(), m_Positions.end(),
+                                    []( const Vector2& a, const Vector2& b ) { return a.x < b.x; } )
+                      ->x;
+
+    //-------------------------------------------------------------------------
+
+    float min_y = std::min_element( std::execution::par_unseq, m_Positions.begin(), m_Positions.end(),
+                                    []( const Vector2& a, const Vector2& b ) { return a.y < b.y; } )
+                      ->y;
+
+    //-------------------------------------------------------------------------
+
+    float max_x = std::max_element( std::execution::par_unseq, m_Positions.begin(), m_Positions.end(),
+                                    []( const Vector2& a, const Vector2& b ) { return a.x < b.x; } )
+                      ->x;
+
+    //-------------------------------------------------------------------------
+
+    float max_y = std::max_element( std::execution::par_unseq, m_Positions.begin(), m_Positions.end(),
+                                    []( const Vector2& a, const Vector2& b ) { return a.y < b.y; } )
+                      ->y;
+
+    //-------------------------------------------------------------------------
+
+    float radius = m_PhysicsSettings.SmoothingRadius;
+
+    m_MinCol = min_x / radius;
+    m_MaxCol = max_x / radius;
+    m_MinRow = min_y / radius;
+    m_MaxRow = max_y / radius;
+
+    m_GridWidth  = m_MaxCol - m_MinCol + 1;
+    m_GridHeight = m_MaxRow - m_MinRow + 1;
+    m_CellCount  = m_GridWidth * m_GridHeight;
+}
+
+int32_t Simulation::GetGridIndex( Vector2 pos ) noexcept
+{
+    pos /= m_PhysicsSettings.SmoothingRadius;
+
+    // Old version.
+    // int32_t x  = pos.x; // Should floor, if bugs, mabey this is rounding...
+    // int32_t y  = pos.y; // -| |-
+
+    int32_t x = pos.x - m_MinCol;
+    int32_t y = pos.y - m_MinRow;
+
+    // return x + y * m_GridAxisSize;
+    return x + y * m_GridWidth;
 }
 
 //-------------------------------------------------------------------------
 
-void SandboxSimulation::UpdateGridIndices() noexcept
+void Simulation::UpdateGridIndices() noexcept
 {
 
     //-------------------------------------------------------------------------
 
-    m_GridAxisSize = m_PhysicsSettings.SimulationResolution / m_PhysicsSettings.SmoothingRadius;
-    ++m_GridAxisSize; // We increment by one, to account for any potential flooring. Having this be one larger than necessary won't matter.
+    // Old version.
+    // m_GridAxisSize = m_PhysicsSettings.SimulationResolution / m_PhysicsSettings.SmoothingRadius;
+    // ++m_GridAxisSize; // We increment by one, to account for any potential flooring. Having this be one larger than necessary won't matter.
+
+    UpdateGridDims();
 
     //-------------------------------------------------------------------------
 
+    // Get the index for each particle...
     std::for_each( std::execution::par_unseq, m_Positions.begin(), m_Positions.end(), [this]( const Vector2& pos ) {
         size_t i         = &pos - m_Positions.data();
         m_GridIndices[i] = GetGridIndex( pos );
@@ -162,9 +154,17 @@ void SandboxSimulation::UpdateGridIndices() noexcept
 
     //-------------------------------------------------------------------------
 
-    uint32_t cellCount = m_GridAxisSize * m_GridAxisSize;
+    // Old version
+    // uint32_t cellCount = m_GridAxisSize * m_GridAxisSize;
+
+    uint32_t cellCount = m_CellCount;
 
     //-------------------------------------------------------------------------
+
+    // This should be fine for the new version.
+    // We do however have a massive problem, if some particle goes -> inf...
+    // As we will need to allocate a MASSIVE amount of storage...
+    // Mabey do some check somewhere, (if len(pos) > threshold) { delete particle, or reset it... }
 
     // Reset the indexing.
     // We use cellCount + 1, so we can easily acces the indices that belong to a cell, by just taking all the indices between [cellindex] -> [cellindex + 1]
@@ -178,8 +178,6 @@ void SandboxSimulation::UpdateGridIndices() noexcept
 
     // Now we sort the particles.
     m_SortedParticles.resize( m_GridIndices.size() );
-
-    //-------------------------------------------------------------------------
 
     // Track where we should place the next particle, that belongs to a specific cell.
     std::vector<int32_t> NextIndex = m_CellStart;
@@ -199,13 +197,17 @@ void SandboxSimulation::UpdateGridIndices() noexcept
 
 //-------------------------------------------------------------------------
 
-std::vector<int32_t> SandboxSimulation::GetNeighbourCells( int32_t i ) noexcept
+std::vector<int32_t> Simulation::GetNeighbourCells( int32_t i ) noexcept
 {
 
     //-------------------------------------------------------------------------
 
-    int32_t col = i % m_GridAxisSize;
-    int32_t row = i / m_GridAxisSize;
+    // Old
+    // int32_t col = i % m_GridAxisSize;
+    // int32_t row = i / m_GridAxisSize;
+
+    int32_t col = i % m_GridWidth;
+    int32_t row = i / m_GridWidth;
 
     //-------------------------------------------------------------------------
 
@@ -224,9 +226,9 @@ std::vector<int32_t> SandboxSimulation::GetNeighbourCells( int32_t i ) noexcept
 
             // Check if the location is within bound.
             // Note this needs to be reworked, if implementing something like ghost cells.
-            if ( c > 0 || c < m_GridAxisSize || r > 0 || r < m_GridAxisSize )
+            if ( c >= 0 && c < m_GridWidth && r >= 0 && r < m_GridHeight )
             {
-                neighbours.push_back( c + r * m_GridAxisSize );
+                neighbours.push_back( c + r * m_GridWidth );
             }
         }
     }
@@ -240,7 +242,7 @@ std::vector<int32_t> SandboxSimulation::GetNeighbourCells( int32_t i ) noexcept
 
 //-------------------------------------------------------------------------
 
-std::span<int32_t> SandboxSimulation::GetParticlesInCell( int32_t i ) noexcept
+std::span<int32_t> Simulation::GetParticlesInCell( int32_t i ) noexcept
 {
     // Bounds checking
     if ( i < 0 || i >= m_CellStart.size() - 1 )
@@ -251,32 +253,92 @@ std::span<int32_t> SandboxSimulation::GetParticlesInCell( int32_t i ) noexcept
 }
 
 //-------------------------------------------------------------------------
-void SandboxSimulation::Run() noexcept
+
+void Simulation::Run() noexcept
 {
+
     while ( !WindowShouldClose() )
     {
 
+        //-------------------------------------------------------------------------
+
         Render();
+
+        //-------------------------------------------------------------------------
+
+        // Avoid Updating inf times, when trying to change the radius...
         if ( m_PhysicsSettings.SmoothingRadius == 0 )
         {
             continue;
         }
 
-        m_PhysicsSettings.RestTime += m_PhysicsSettings.FrameTime;
+        //-------------------------------------------------------------------------
 
-        float timestep = m_PhysicsSettings.SmoothingRadius / std::sqrt( m_PhysicsSettings.PressureMultiplier ) / m_PhysicsSettings.InvTimestepMultiplier;
-        timestep       = timestep > m_PhysicsSettings.FrameTime ? m_PhysicsSettings.FrameTime : timestep;
+        float slowdown = m_PhysicsSettings.SlowMultiplier < 1e-3f ? 1.0f : m_PhysicsSettings.SlowMultiplier;
+
+        m_PhysicsSettings.RestTime += m_PhysicsSettings.FrameTime / slowdown;
+        float timestep              = m_PhysicsSettings.SmoothingRadius / std::sqrt( m_PhysicsSettings.PressureMultiplier ) / m_PhysicsSettings.InvTimestepMultiplier;
+        timestep                    = timestep > m_PhysicsSettings.FrameTime ? m_PhysicsSettings.FrameTime : timestep;
+
+        //-------------------------------------------------------------------------
 
         while ( m_PhysicsSettings.RestTime >= timestep )
         {
             Update( timestep );
             m_PhysicsSettings.RestTime -= timestep;
         }
+
+        //-------------------------------------------------------------------------
     }
 }
 
-void SandboxSimulation::Restart() noexcept
+void Simulation::InitSandbox( /* Change this to take a bool, on whether or not to reset settings */ ) noexcept
 {
+    //-------------------------------------------------------------------------
+
+    m_PhysicsSettings.ApplyPressureForce = false;
+    m_PhysicsSettings.ApplyViscocity     = false;
+    m_PhysicsSettings.ApplyGravity       = false;
+    m_PhysicsSettings.ApplyMouseForce    = false;
+
+    m_PhysicsSettings.SlowMultiplier = 1.0f;
+
+    //-------------------------------------------------------------------------
+
+    m_Masses                                = 1.0f;
+    m_PhysicsSettings.Paused                = true;
+    m_PhysicsSettings.ParticleCount         = 2000;
+    m_PhysicsSettings.SmoothingRadius       = 0.35;
+    m_PhysicsSettings.InvTimestepMultiplier = 2.0f;
+    m_PhysicsSettings.GravityMultiplier     = 5.0f;
+    m_PhysicsSettings.TargetDensity         = 15.0f;
+    m_PhysicsSettings.PressureMultiplier    = 100.0f;
+    m_PhysicsSettings.Viscocity             = 0.01f;
+    m_PhysicsSettings.Scheme                = UpdateScheme::Implicit;
+
+    //-------------------------------------------------------------------------
+
+    m_DebugSettings.Draw               = true;
+    m_DebugSettings.ParticleDrawRadius = 5.0f;
+
+    m_DebugSettings.Field            = DebugField::Density;
+    m_DebugSettings.DebugFieldMiddle = 10.0f;
+    m_DebugSettings.DebugFieldMax    = 30.0f;
+
+    //-------------------------------------------------------------------------
+
+    m_AFEnabled = false;
+
+    //-------------------------------------------------------------------------
+
+    uint32_t particleCount = m_PhysicsSettings.ParticleCount;
+    m_Positions.resize( particleCount );
+    m_Velocities.resize( particleCount );
+    m_ParticleColors.assign( particleCount, BLUE );
+
+    //-------------------------------------------------------------------------
+
+    // For the sandbox, we initialilze the particles randomly, without velocity.
     for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
     {
         // Position
@@ -289,15 +351,16 @@ void SandboxSimulation::Restart() noexcept
         float dx = 0.0f;
         float dy = 0.0f;
 
-        // Set a random velocity:
-        // float max = 5.0f;
-        // dx        = GetRandomValue( -max, max );
-        // dy        = GetRandomValue( -max, max );;
-
         m_Velocities[i] = Vector2( dx, dy );
 
         //-------------------------------------------------------------------------
     }
+
+    //-------------------------------------------------------------------------
+
+    UpdateGridIndices();
+
+    //-------------------------------------------------------------------------
 
     // Initialize the fields.
     m_Densities.resize( m_PhysicsSettings.ParticleCount );
@@ -308,13 +371,123 @@ void SandboxSimulation::Restart() noexcept
 
     m_PressureGradiants.resize( m_PhysicsSettings.ParticleCount );
     UpdatePressureGradiant();
+
+    // Avoid the density only being drawn, when we unpause...
+    DrawDensity(); // <- Doesn't work for some reason... Or the field is very weak?? WFT... It works after unpausing...
+
+    //-------------------------------------------------------------------------
+
+    // Update the borders, so they are as they should be:
+    m_BorderP1.resize( 0 );
+    m_BorderP2.resize( 0 );
+    m_BorderP1.insert( m_BorderP1.begin(), { { 0, 0 }, { m_PhysicsSettings.SimulationResolution, 0 }, { m_PhysicsSettings.SimulationResolution, m_PhysicsSettings.SimulationResolution }, { 0, m_PhysicsSettings.SimulationResolution } } );
+    m_BorderP2.insert( m_BorderP2.begin(), { { m_PhysicsSettings.SimulationResolution, 0 }, { m_PhysicsSettings.SimulationResolution, m_PhysicsSettings.SimulationResolution }, { 0, m_PhysicsSettings.SimulationResolution }, { 0, 0 } } );
+
+    //-------------------------------------------------------------------------
+}
+
+void Simulation::InitAirfoil( /* Change this to take a bool, on whether or not to reset settings */ ) noexcept
+{
+    //-------------------------------------------------------------------------
+
+    m_PhysicsSettings.ApplyPressureForce = true;
+    m_PhysicsSettings.ApplyViscocity     = true;
+    m_PhysicsSettings.ApplyGravity       = false;
+    m_PhysicsSettings.ApplyMouseForce    = false;
+
+    m_PhysicsSettings.SlowMultiplier = 5.0f;
+
+    //-------------------------------------------------------------------------
+
+    m_Masses                                = 1.0f;
+    m_PhysicsSettings.Paused                = true;
+    m_PhysicsSettings.ParticleCount         = 5000;
+    m_PhysicsSettings.SmoothingRadius       = 0.45f;
+    m_PhysicsSettings.InvTimestepMultiplier = 4.0f; // Large here to avoid them phasing through the airfoil...
+    m_PhysicsSettings.GravityMultiplier     = 0.0f;
+    m_PhysicsSettings.TargetDensity         = 10.0f;
+    m_PhysicsSettings.PressureMultiplier    = 1000.0f;
+    m_PhysicsSettings.Viscocity             = 0.01f;
+    m_PhysicsSettings.Scheme                = UpdateScheme::Implicit;
+
+    //-------------------------------------------------------------------------
+
+    m_DebugSettings.Draw               = true;
+    m_DebugSettings.ParticleDrawRadius = 5.0f;
+
+    m_DebugSettings.Field            = DebugField::None;
+    m_DebugSettings.DebugFieldMiddle = 30.0f;
+    m_DebugSettings.DebugFieldMax    = 70.0f;
+
+    //-------------------------------------------------------------------------
+
+    m_AFEnabled  = true;
+    m_AFScale    = 2.0f;
+    m_AFRotation = 4.7f;
+    m_AFOffset   = { 0.0f, 4.4f };
+    UpdateAirfoil();
+
+    //-------------------------------------------------------------------------
+
+    uint32_t particleCount = m_PhysicsSettings.ParticleCount;
+    m_Positions.resize( particleCount );
+    m_Velocities.resize( particleCount );
+    m_ParticleColors.assign( particleCount, BLUE );
+
+    //-------------------------------------------------------------------------
+
+    // For the sandbox, we initialilze the particles randomly, without velocity.
+    for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
+    {
+        // Position
+        float x        = RandomFloat( -1.0f, m_PhysicsSettings.SimulationResolution + 5.0f );
+        float y        = RandomFloat( 0.0f, m_PhysicsSettings.SimulationResolution );
+        m_Positions[i] = Vector2( x, y );
+
+        //-------------------------------------------------------------------------
+
+        float dx = m_AFSpawningSpeed;
+        float dy = 0.0f;
+
+        m_Velocities[i] = Vector2( dx, dy );
+
+        //-------------------------------------------------------------------------
+    }
+
+    //-------------------------------------------------------------------------
+
+    m_GridIndices.resize( m_PhysicsSettings.ParticleCount );
+    UpdateGridIndices();
+
+    //-------------------------------------------------------------------------
+
+    // Initialize the fields.
+    m_Densities.resize( m_PhysicsSettings.ParticleCount );
+    UpdateDensities();
+
+    m_Pressures.resize( m_PhysicsSettings.ParticleCount );
+    UpdatePressures();
+
+    m_PressureGradiants.resize( m_PhysicsSettings.ParticleCount );
+    UpdatePressureGradiant();
+
+    // Avoid the density only being drawn, when we unpause...
+    DrawDensity();
+
+    //-------------------------------------------------------------------------
+
+    // Update the borders, so they are as they should be:
+    m_BorderP1.resize( 0 );
+    m_BorderP2.resize( 0 );
+    m_BorderP1.insert( m_BorderP1.begin(), { { 0, 0 }, { m_PhysicsSettings.SimulationResolution, m_PhysicsSettings.SimulationResolution }, { -3, m_PhysicsSettings.SimulationResolution } } );
+    m_BorderP2.insert( m_BorderP2.begin(), { { m_PhysicsSettings.SimulationResolution, 0 }, { 0, m_PhysicsSettings.SimulationResolution }, { -3, 0 } } );
+
+    //-------------------------------------------------------------------------
 }
 
 //-------------------------------------------------------------------------
 
-void SandboxSimulation::SetScheme( UpdateScheme scheme ) noexcept { m_PhysicsSettings.Scheme = scheme; }
-
-void SandboxSimulation::Update( float timestep ) noexcept
+void Simulation::Update( float timestep ) noexcept
 {
 
     if ( m_PhysicsSettings.Paused )
@@ -336,7 +509,7 @@ void SandboxSimulation::Update( float timestep ) noexcept
     }
 }
 
-void SandboxSimulation::ImplicitUpdate( float timestep ) noexcept
+void Simulation::ImplicitUpdate( float timestep ) noexcept
 {
 
     //-------------------------------------------------------------------------
@@ -353,7 +526,8 @@ void SandboxSimulation::ImplicitUpdate( float timestep ) noexcept
         m_Positions[i] += m_Velocities[i] * timestep;
     }
 
-    HandleBorderCollision();
+    HandleBoundary();
+
     //-------------------------------------------------------------------------
 
     // Update velocity implicitly.
@@ -424,10 +598,10 @@ void SandboxSimulation::ImplicitUpdate( float timestep ) noexcept
 
     // Make sure the balls stay inside the box.
     // Acts like a reflective BC i guess...
-    HandleBorderCollision();
+    HandleBoundary();
 }
 
-void SandboxSimulation::ExplicitUpdate( float timestep ) noexcept
+void Simulation::ExplicitUpdate( float timestep ) noexcept
 {
 
     //-------------------------------------------------------------------------
@@ -487,12 +661,12 @@ void SandboxSimulation::ExplicitUpdate( float timestep ) noexcept
 
     // Make sure the balls stay inside the box.
     // Acts like a reflective BC i guess...
-    HandleBorderCollision();
+    HandleBoundary();
 }
 
 //-------------------------------------------------------------------------
 
-void SandboxSimulation::HandleBorderCollision() noexcept
+void Simulation::HandleBoundary() noexcept
 {
     for ( uint32_t i = 0; i < m_Positions.size(); i++ )
     {
@@ -509,18 +683,69 @@ void SandboxSimulation::HandleBorderCollision() noexcept
             float   offset = Vector2DotProduct( normal, P1 - m_Positions[i] );
 
             // If we are outside our box:
+            // Or inside, if the points are counter clockwise...
             if ( offset > 0 )
             {
-                pos += normal * offset;                                  // Reflect the travel
-                vel -= normal * Vector2DotProduct( vel, normal ) * 1.15; // Reflect the particle.
+                pos += normal * offset * 2;                           // Reflect the travel
+                vel -= normal * Vector2DotProduct( vel, normal ) * 2; // Reflect the particle.
             }
         }
+
+        if ( m_AFEnabled )
+        {
+            // If we use the same method we did for the walls it won't work.
+            // That only works, if we want to be on the inside...
+            // So we need to find the edge we are closest to, and only use that as a comparison.
+
+            float    shortestDistance = INFINITY;
+            uint32_t shortestIdx      = 0;
+
+            for ( uint32_t k = 0; k < m_TransformedAirfoilP1.size(); k++ )
+            {
+                Vector2 P1 = m_TransformedAirfoilP1[k];
+                Vector2 P2 = m_TransformedAirfoilP2[k];
+
+                // We need to find the point on the edge, that is closest to the particle.
+                // We can't do as we did before, as we treat those as infinite lines.
+                Vector2 edge         = P2 - P1;
+                Vector2 closestPoint = P1 + edge * Clamp( Vector2DotProduct( pos - P1, edge ) / Vector2DotProduct( edge, edge ), 0.0f, 1.0f );
+
+                float distance = Vector2Distance( pos, closestPoint );
+
+                if ( distance < shortestDistance )
+                {
+                    shortestDistance = distance;
+                    shortestIdx      = k;
+                }
+            }
+
+            // Now we can do the response...
+            // This is the same as for the line now...
+            Vector2 P1 = m_TransformedAirfoilP1[shortestIdx];
+            Vector2 P2 = m_TransformedAirfoilP2[shortestIdx];
+
+            Vector2 normal = Vector2Normalize( Vector2Rotate( P2 - P1, PI / 2 ) );
+            float   offset = Vector2DotProduct( normal, P1 - m_Positions[i] );
+
+            // If we are outside our box:
+            // Or inside, if the points are counter clockwise...
+            if ( offset > 0 )
+            {
+                pos += normal * offset;
+                vel -= normal * Vector2DotProduct( vel, normal );
+            }
+        }
+    }
+
+    if ( m_AFEnabled )
+    {
+        AirfoilParticleTeleport();
     }
 }
 
 //-------------------------------------------------------------------------
 
-float SandboxSimulation::CalculateDensity( Vector2 location ) noexcept
+float Simulation::CalculateDensity( Vector2 location ) noexcept
 {
 
     int32_t index            = GetGridIndex( location );
@@ -540,7 +765,7 @@ float SandboxSimulation::CalculateDensity( Vector2 location ) noexcept
 
 //-------------------------------------------------------------------------
 
-void SandboxSimulation::UpdateDensities() noexcept
+void Simulation::UpdateDensities() noexcept
 {
 
     //-------------------------------------------------------------------------
@@ -574,13 +799,13 @@ void SandboxSimulation::UpdateDensities() noexcept
 
 //-------------------------------------------------------------------------
 
-float SandboxSimulation::CalculatePressure( Vector2 location ) noexcept
+float Simulation::CalculatePressure( Vector2 location ) noexcept
 {
     float difference = CalculateDensity( location ) - m_PhysicsSettings.TargetDensity;
     return difference * m_PhysicsSettings.PressureMultiplier;
 }
 
-float SandboxSimulation::CalculatePressure( uint32_t index ) noexcept
+float Simulation::CalculatePressure( uint32_t index ) noexcept
 {
     float difference = m_Densities[index] - m_PhysicsSettings.TargetDensity;
     return difference * m_PhysicsSettings.PressureMultiplier;
@@ -588,7 +813,7 @@ float SandboxSimulation::CalculatePressure( uint32_t index ) noexcept
 
 //-------------------------------------------------------------------------
 
-void SandboxSimulation::UpdatePressures() noexcept
+void Simulation::UpdatePressures() noexcept
 {
     // No need to update them all at once, since we don't use the pressures, but the densities to calculate the pressure.
     std::for_each( std::execution::par_unseq, m_Pressures.begin(), m_Pressures.end(),
@@ -600,7 +825,7 @@ void SandboxSimulation::UpdatePressures() noexcept
 
 //-------------------------------------------------------------------------
 
-void SandboxSimulation::UpdatePressureGradiant() noexcept
+void Simulation::UpdatePressureGradiant() noexcept
 {
     std::for_each( std::execution::par_unseq, m_Positions.begin(), m_Positions.end(), [this]( const Vector2& pos ) {
         size_t i                     = &pos - m_Positions.data();
@@ -610,7 +835,7 @@ void SandboxSimulation::UpdatePressureGradiant() noexcept
 
 //-------------------------------------------------------------------------
 
-Vector2 SandboxSimulation ::CalculatePressureGradiant( Vector2 location ) noexcept
+Vector2 Simulation ::CalculatePressureGradiant( Vector2 location ) noexcept
 {
 
     //-------------------------------------------------------------------------
@@ -647,7 +872,7 @@ Vector2 SandboxSimulation ::CalculatePressureGradiant( Vector2 location ) noexce
     return gradient;
 }
 
-Vector2 SandboxSimulation::CalculatePressureGradiant( uint32_t index ) noexcept
+Vector2 Simulation::CalculatePressureGradiant( uint32_t index ) noexcept
 {
     //-------------------------------------------------------------------------
 
@@ -702,7 +927,7 @@ Vector2 SandboxSimulation::CalculatePressureGradiant( uint32_t index ) noexcept
 
 //-------------------------------------------------------------------------
 
-Vector2 SandboxSimulation::CalculateViscocityForce( uint32_t index ) noexcept
+Vector2 Simulation::CalculateViscocityForce( uint32_t index ) noexcept
 {
 
     int32_t cell             = GetGridIndex( m_Positions[index] );
@@ -740,7 +965,7 @@ Vector2 SandboxSimulation::CalculateViscocityForce( uint32_t index ) noexcept
     return force;
 }
 
-void SandboxSimulation::ApplyViscocity( float timestep ) noexcept
+void Simulation::ApplyViscocity( float timestep ) noexcept
 {
     std::for_each( std::execution::par_unseq, m_SortedParticles.begin(), m_SortedParticles.end(), [this, &timestep]( const int32_t& idx ) {
         Vector2 force      = CalculateViscocityForce( idx );
@@ -750,10 +975,65 @@ void SandboxSimulation::ApplyViscocity( float timestep ) noexcept
 
 //-------------------------------------------------------------------------
 
-void SandboxSimulation::Render() noexcept
+void Simulation::UpdateAirfoil() noexcept
+{
+    m_TransformedAirfoilP1.resize( AirfoilP1.size() );
+    m_TransformedAirfoilP2.resize( AirfoilP2.size() );
+
+    for ( uint32_t i = 0; i < AirfoilP1.size(); i++ )
+    {
+        Vector2 transformedP1 = Vector2Add( m_AFOffset, Vector2Rotate( Vector2Scale( AirfoilP1[i], m_AFScale ), m_AFRotation ) );
+        Vector2 transformedP2 = Vector2Add( m_AFOffset, Vector2Rotate( Vector2Scale( AirfoilP2[i], m_AFScale ), m_AFRotation ) );
+
+        m_TransformedAirfoilP1[i] = transformedP1;
+        m_TransformedAirfoilP2[i] = transformedP2;
+    }
+}
+
+void Simulation::AirfoilParticleTeleport() noexcept
+{
+
+    int32_t colorHere  = GetGridIndex( { m_AFOffset.x - 0.5f, m_PhysicsSettings.SimulationResolution / 2.0f } );
+    int32_t colorHere2 = GetGridIndex( { m_AFOffset.x - 0.5f, m_PhysicsSettings.SimulationResolution / 2.0f - 1.0f } );
+
+    std::for_each( std::execution::par_unseq, m_SortedParticles.begin(), m_SortedParticles.end(), [this, &colorHere, &colorHere2]( int32_t index ) {
+        Vector2& pos = m_Positions[index];
+        if ( pos.x > m_PhysicsSettings.SimulationResolution + 5 )
+        {
+            pos.x                 = -1.0f;
+            m_Velocities[index].x = m_AFSpawningSpeed;
+            // m_ParticleColors[index] = BLUE;
+        }
+
+        int32_t particleIdx = GetGridIndex( pos );
+
+        if ( colorHere == particleIdx )
+        {
+            m_ParticleColors[index] = GREEN;
+        }
+        if ( colorHere2 == particleIdx )
+        {
+            m_ParticleColors[index] = LIME;
+        }
+
+        if ( pos.x > m_AFOffset.x - 0.75f && pos.x < m_AFOffset.x - 0.5f )
+        {
+            m_ParticleColors[index] = BLUE;
+        }
+    } );
+}
+
+//-------------------------------------------------------------------------
+
+void Simulation::Render() noexcept
 {
 
     //-------------------------------------------------------------------------
+
+    if ( m_AFEnabled )
+    {
+        UpdateAirfoil();
+    }
 
     BeginDrawing();
     rlImGuiBegin();
@@ -778,6 +1058,11 @@ void SandboxSimulation::Render() noexcept
 
     //-------------------------------------------------------------------------
 
+    if ( m_AFEnabled )
+    {
+        for ( uint32_t i = 0; i < m_TransformedAirfoilP1.size(); i++ ) { DrawLineEx( WorldSpaceToScreenSpace( m_TransformedAirfoilP1[i] ), WorldSpaceToScreenSpace( m_TransformedAirfoilP2[i] ), 3.0f, BLACK ); }
+    }
+
     if ( m_DebugSettings.Draw )
     {
         for ( uint32_t i = 0; i < m_BorderP1.size(); i++ )
@@ -801,6 +1086,12 @@ void SandboxSimulation::Render() noexcept
     DrawPhysicsOverlay();
     DrawDebugOverlay();
 
+    if ( m_AFEnabled )
+    {
+        // Enabled for specific presets.
+        DrawAirfoilOverlay();
+    }
+
     //-------------------------------------------------------------------------
 
     rlImGuiEnd();
@@ -809,7 +1100,7 @@ void SandboxSimulation::Render() noexcept
 
 //-------------------------------------------------------------------------
 
-void SandboxSimulation::DrawDensity() noexcept
+void Simulation::DrawDensity() noexcept
 {
 
     // How does each pixel location map to the world?
@@ -845,7 +1136,7 @@ void SandboxSimulation::DrawDensity() noexcept
                     { 0, 0, static_cast<float>( m_DebugSettings.RenderResolution ), static_cast<float>( m_DebugSettings.RenderResolution ) }, { 0, 0 }, 0, WHITE );
 }
 
-void SandboxSimulation::DrawPressure() noexcept
+void Simulation::DrawPressure() noexcept
 {
 
     // How does each pixel location map to the world?
@@ -893,7 +1184,7 @@ void SandboxSimulation::DrawPressure() noexcept
 //-------------------------------------------------------------------------
 
 // It is assumed that rlImGuiBegin() and rlImGuiEnd() are called outside this scope.;
-void SandboxSimulation::DrawPhysicsOverlay() noexcept
+void Simulation::DrawPhysicsOverlay() noexcept
 {
 
     //-------------------------------------------------------------------------
@@ -905,7 +1196,10 @@ void SandboxSimulation::DrawPhysicsOverlay() noexcept
     ImGui::Text( "%.1f FPS", static_cast<double>( GetFPS() ) );
     ImGui::Checkbox( "Pause", &m_PhysicsSettings.Paused );
     ImGui::SameLine();
-    if ( ImGui::Button( "Restart" ) ) { Restart(); }
+    ImGui::InputFloat( "Slowdown", &m_PhysicsSettings.SlowMultiplier );
+    if ( ImGui::Button( "StartSandbox" ) ) { InitSandbox(); }
+    ImGui::SameLine();
+    if ( ImGui::Button( "StartAirfoil" ) ) { InitAirfoil(); }
     ImGui::SliderFloat( " InvTimestepMultiplier ", &m_PhysicsSettings.InvTimestepMultiplier, 1.0f, 10.0f );
 
     //-------------------------------------------------------------------------
@@ -915,11 +1209,9 @@ void SandboxSimulation::DrawPhysicsOverlay() noexcept
     //-------------------------------------------------------------------------
 
     ImGui::Text( "Scheme" );
-
-    if ( ImGui::Button( " Explicit " ) ) { SetScheme( UpdateScheme::Explicit ); }
+    if ( ImGui::Button( " Explicit " ) ) { m_PhysicsSettings.Scheme = UpdateScheme::Explicit; }
     ImGui::SameLine();
-    if ( ImGui::Button( " Implicit " ) ) { SetScheme( UpdateScheme::Implicit ); }
-
+    if ( ImGui::Button( " Implicit " ) ) { m_PhysicsSettings.Scheme = UpdateScheme::Implicit; }
     //-------------------------------------------------------------------------
 
     ImGui::Separator();
@@ -950,7 +1242,7 @@ void SandboxSimulation::DrawPhysicsOverlay() noexcept
     ImGui::End();
 }
 
-void SandboxSimulation::DrawDebugOverlay() noexcept
+void Simulation::DrawDebugOverlay() noexcept
 {
 
     ImGui::Begin( "Debug Settings" );
@@ -983,11 +1275,19 @@ void SandboxSimulation::DrawDebugOverlay() noexcept
     }
 
     ImGui::End();
+}
 
-    // Just debug stuff...
-    ImGui::Begin( "DEBUG" );
-    ImGui::Text( " The axis size of the grid is currently: %i ", m_GridAxisSize );
-    ImGui::Text( " This gives a simulation width of: %.02f ", m_GridAxisSize * m_PhysicsSettings.SmoothingRadius );
+void Simulation::DrawAirfoilOverlay() noexcept
+{
+    ImGui::Begin( "Airfoil" );
+    ImGui::Checkbox( " Enable Airfoil ", &m_AFEnabled );
+    if ( m_AFEnabled )
+    {
+        ImGui::SliderFloat( " Offset-X ", &m_AFOffset.x, 0.0f, m_PhysicsSettings.SimulationResolution );
+        ImGui::SliderFloat( " Offset-Y ", &m_AFOffset.y, 0.0f, m_PhysicsSettings.SimulationResolution );
+        ImGui::SliderFloat( " Scale ", &m_AFScale, 0.0f, 10.0f );
+        ImGui::SliderFloat( " Rotation ", &m_AFRotation, 0.0f, 2 * PI );
+    }
     ImGui::End();
 }
 
