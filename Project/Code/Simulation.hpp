@@ -101,15 +101,15 @@ struct DebugSettings
 
 //-------------------------------------------------------------------------
 
-class SandboxSimulation
+class Simulation
 {
 
 public:
 
     //-------------------------------------------------------------------------
 
-    SandboxSimulation( uint32_t size );
-    ~SandboxSimulation();
+    Simulation( uint32_t size );
+    ~Simulation();
 
     //-------------------------------------------------------------------------
 
