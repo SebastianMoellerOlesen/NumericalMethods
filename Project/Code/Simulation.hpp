@@ -38,6 +38,7 @@ struct PhysicsSettings
     float SmoothingRadius{ 2 * std::sqrt( SimulationResolution * SimulationResolution / ( ParticleCount ) ) };
 
     bool ApplyPressureForce{ true };
+    bool ApplyMouseForce{ false };
 
     // This is directly linked to the speed of sound in the fluid.
     // c^2 = PressureMultiplier, which is due to the way we calculate the pressure.
@@ -69,7 +70,7 @@ struct DebugSettings
     bool       Draw{ true };
     DebugField Field{ DebugField::None };
 
-    bool  DrawSpeedColor{ true };
+    bool  DrawSpeedColor{ false };
     float MaxSpeed{ 1.0f };
 
     //-------------------------------------------------------------------------

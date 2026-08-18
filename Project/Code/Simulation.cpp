@@ -369,8 +369,7 @@ void Simulation::ImplicitUpdate() noexcept
         }
     }
 
-    // For testing...
-    if ( IsMouseButtonDown( MOUSE_LEFT_BUTTON ) || IsMouseButtonDown( MOUSE_RIGHT_BUTTON ) )
+    if ( ( IsMouseButtonDown( MOUSE_LEFT_BUTTON ) || IsMouseButtonDown( MOUSE_RIGHT_BUTTON ) ) && m_PhysicsSettings.ApplyMouseForce )
     {
         float   multiplier = IsMouseButtonDown( MOUSE_LEFT_BUTTON ) ? 1.0f : -1.0f;
         Vector2 worldPos   = GetMousePosition() / m_DebugSettings.RenderResolution * m_PhysicsSettings.SimulationResolution;
@@ -835,6 +834,8 @@ void Simulation::DrawPhysicsOverlay() noexcept
     ImGui::Checkbox( " Pressure Force ", &m_PhysicsSettings.ApplyPressureForce );
     ImGui::SameLine();
     ImGui::Checkbox( " Gravity ", &m_PhysicsSettings.ApplyGravity );
+    ImGui::SameLine();
+    ImGui::Checkbox( " Mouse ", &m_PhysicsSettings.ApplyMouseForce );
 
     if ( m_PhysicsSettings.ApplyPressureForce ) { ImGui::InputFloat( "Pressure Multiplier", &m_PhysicsSettings.PressureMultiplier, 0.1f, 1.0f ); }
     if ( m_PhysicsSettings.ApplyGravity ) { ImGui::InputFloat( "Gravity Multiplier", &m_PhysicsSettings.GravityMultiplier, 0.01f, 0.1f ); }
