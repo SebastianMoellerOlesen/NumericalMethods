@@ -257,7 +257,6 @@ void Simulation::Run() noexcept
     {
 
         Render();
-
         if ( m_PhysicsSettings.SmoothingRadius == 0 )
         {
             continue;
@@ -265,7 +264,7 @@ void Simulation::Run() noexcept
 
         m_PhysicsSettings.RestTime += m_PhysicsSettings.FrameTime;
 
-        float timestep = m_PhysicsSettings.SmoothingRadius / std::sqrt( m_PhysicsSettings.PressureMultiplier ) / 4.0f;
+        float timestep = m_PhysicsSettings.SmoothingRadius / std::sqrt( m_PhysicsSettings.PressureMultiplier ) / 2.0f;
         timestep       = timestep > m_PhysicsSettings.FrameTime ? m_PhysicsSettings.FrameTime : timestep;
 
         while ( m_PhysicsSettings.RestTime >= timestep )
@@ -358,15 +357,14 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
     //-------------------------------------------------------------------------
 
     // Update velocity implicitly.
+    // Todo: Change the UpdateMethods to apply if applicable...
+    // Mostly the PressureGradiant...
+
     UpdateGridIndices();
     UpdateDensities();
     UpdatePressures();
-    UpdatePressureGradiant();
 
-    //-------------------------------------------------------------------------
-
-    // Restore the old pos, so we can update it using the new vel.
-    m_Positions = std::move( pos );
+    UpdatePressureGradiant(); // Update to ApplyPressureGradiant()... Should be straight forward...
 
     //-------------------------------------------------------------------------
 
@@ -401,6 +399,22 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
         }
     }
 
+    if ( m_PhysicsSettings.ApplyViscocity )
+    {
+        // We use operator splitting, to compute the Viscocity.
+        // v^*(n+1) = v^(n) + dt * F(p^(n+1))
+        // v^(n+1) = dt * F(v^*(n+1))
+        //
+        // We can mabey apply the Strang Splitting here.
+        // Since the ApplyViscocity update the velocities directly, would it cause an issue?
+        // Just think about how the Strang splitting actually works...
+        // But for now, i'll keep it simple.
+        ApplyViscocity( timestep );
+    }
+
+    // Restore the old pos, so we can update it using the new vel.
+    m_Positions = std::move( pos );
+
     for ( uint32_t i = 0; i < m_Positions.size(); i++ )
     {
         m_Positions[i] += m_Velocities[i] * timestep;
@@ -419,12 +433,19 @@ void Simulation::ExplicitUpdate( float timestep ) noexcept
     //-------------------------------------------------------------------------
 
     UpdateGridIndices();
-
     UpdateDensities();
     UpdatePressures();
     UpdatePressureGradiant();
 
     //-------------------------------------------------------------------------
+
+    if ( m_PhysicsSettings.ApplyViscocity )
+    {
+        // The update method here is completely explicit.
+        // Currently we have pos^(n), and velocity^(n).
+        // The force from the other methods are also already calculated.
+        ApplyViscocity( timestep );
+    }
 
     if ( m_PhysicsSettings.ApplyPressureForce )
     {
@@ -439,6 +460,21 @@ void Simulation::ExplicitUpdate( float timestep ) noexcept
         for ( uint32_t i = 0; i < m_Positions.size(); i++ )
         {
             m_Velocities[i] += Vector2( 0.0f, 1.0f ) * m_PhysicsSettings.GravityMultiplier * timestep;
+        }
+    }
+
+    if ( ( IsMouseButtonDown( MOUSE_LEFT_BUTTON ) || IsMouseButtonDown( MOUSE_RIGHT_BUTTON ) ) && m_PhysicsSettings.ApplyMouseForce )
+    {
+        float   multiplier = IsMouseButtonDown( MOUSE_LEFT_BUTTON ) ? 1.0f : -1.0f;
+        Vector2 worldPos   = GetMousePosition() / m_DebugSettings.RenderResolution * m_PhysicsSettings.SimulationResolution;
+
+        for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+        {
+            Vector2 difference = worldPos - m_Positions[i];
+            float   distance   = Vector2Length( difference );
+            float   weight     = SimpleSmoothingKernal2D( 2.0f, distance );
+
+            m_Velocities[i] += difference / distance * weight * multiplier * m_PhysicsSettings.PressureMultiplier / m_Densities[i];
         }
     }
 
@@ -666,6 +702,54 @@ Vector2 Simulation::CalculatePressureGradiant( uint32_t index ) noexcept
 
 //-------------------------------------------------------------------------
 
+Vector2 Simulation::CalculateViscocityForce( uint32_t index ) noexcept
+{
+
+    int32_t cell             = GetGridIndex( m_Positions[index] );
+    auto    cells            = GetNeighbourCells( cell );
+    auto    neighbourIndices = cells | std::views::transform( [this]( int32_t cell ) { return GetParticlesInCell( cell ); } ) | std::views::join;
+
+    //-------------------------------------------------------------------------
+
+    Vector2 force = Vector2Zero();
+
+    //-------------------------------------------------------------------------
+
+    for ( int32_t i : neighbourIndices )
+    {
+        if ( i == index )
+        {
+            continue;
+        }
+
+        //-------------------------------------------------------------------------
+
+        Vector2 difference = m_Positions[index] - m_Positions[i];
+        float   distance   = Vector2Length( difference );
+        float   influence  = SimpleSmoothingKernalLaplace2D( m_PhysicsSettings.SmoothingRadius, distance );
+
+        //-------------------------------------------------------------------------
+
+        // Other minus this
+        Vector2 deltaV  = m_Velocities[i] - m_Velocities[index];
+        force          += deltaV * m_PhysicsSettings.Viscocity * m_Masses * influence;
+
+        //-------------------------------------------------------------------------
+    }
+
+    return force;
+}
+
+void Simulation::ApplyViscocity( float timestep ) noexcept
+{
+    std::for_each( std::execution::par_unseq, m_SortedParticles.begin(), m_SortedParticles.end(), [this, &timestep]( const int32_t& idx ) {
+        Vector2 force      = CalculateViscocityForce( idx );
+        m_Velocities[idx] += force * timestep / m_Densities[idx];
+    } );
+}
+
+//-------------------------------------------------------------------------
+
 void Simulation::Render() noexcept
 {
 
@@ -850,11 +934,14 @@ void Simulation::DrawPhysicsOverlay() noexcept
 
     ImGui::Checkbox( " Pressure Force ", &m_PhysicsSettings.ApplyPressureForce );
     ImGui::SameLine();
+    ImGui::Checkbox( " Viscocity ", &m_PhysicsSettings.ApplyViscocity );
+    ImGui::SameLine();
     ImGui::Checkbox( " Gravity ", &m_PhysicsSettings.ApplyGravity );
     ImGui::SameLine();
     ImGui::Checkbox( " Mouse ", &m_PhysicsSettings.ApplyMouseForce );
 
     if ( m_PhysicsSettings.ApplyPressureForce ) { ImGui::InputFloat( "Pressure Multiplier", &m_PhysicsSettings.PressureMultiplier, 0.1f, 1.0f ); }
+    if ( m_PhysicsSettings.ApplyViscocity ) { ImGui::InputFloat( "Viscocity", &m_PhysicsSettings.Viscocity, 0.01f, 0.1f ); }
     if ( m_PhysicsSettings.ApplyGravity ) { ImGui::InputFloat( "Gravity Multiplier", &m_PhysicsSettings.GravityMultiplier, 0.01f, 0.1f ); }
 
     //-------------------------------------------------------------------------

@@ -39,6 +39,7 @@ struct PhysicsSettings
     float SmoothingRadius{ 2 * std::sqrt( SimulationResolution * SimulationResolution / ( ParticleCount ) ) };
 
     bool ApplyPressureForce{ true };
+    bool ApplyViscocity{ false };
     bool ApplyMouseForce{ false };
 
     // This is directly linked to the speed of sound in the fluid.
@@ -46,6 +47,7 @@ struct PhysicsSettings
     // see: https://en.wikipedia.org/wiki/Speed_of_sound
 
     float PressureMultiplier{ 10000.0f / ParticleCount };
+    float Viscocity{ 0.1f }; // Might need tweaking.
 
     bool  ApplyGravity{ false };
     float GravityMultiplier{ 0.0f };
@@ -128,8 +130,7 @@ private:
     void UpdateDensities() noexcept; // Currently uses an explicit method, with the current pos, and density.
     void UpdatePressures() noexcept; // Just conversion from Densities to pressure by some method...
     void UpdatePressureGradiant() noexcept;
-
-    void ApplyForces() noexcept;
+    void ApplyViscocity( float timestep ) noexcept; // Applies it directly to the velocity.
 
     void Render() noexcept;
 
@@ -150,6 +151,9 @@ private:
 
     Vector2 CalculatePressureGradiant( Vector2 location ) noexcept; // Includes all particles, and if pos1 == pos2 generates a random direction.
     Vector2 CalculatePressureGradiant( uint32_t index ) noexcept;   // Skips the gradient from the particle itself, as it should be 0.
+
+    Vector2 CalculateViscocityForce( Vector2 location ) noexcept;
+    Vector2 CalculateViscocityForce( uint32_t index ) noexcept;
 
     //-------------------------------------------------------------------------
 

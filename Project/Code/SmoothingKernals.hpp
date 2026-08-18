@@ -5,7 +5,7 @@
 //-------------------------------------------------------------------------
 
 // The integral is equal to one
-constexpr inline float SimpleSmoothingKernal2D( float radius, float distance )
+constexpr inline float SimpleSmoothingKernal2D( float radius, float distance ) noexcept
 {
     if ( distance > radius )
     {
@@ -17,7 +17,7 @@ constexpr inline float SimpleSmoothingKernal2D( float radius, float distance )
     return smoothingValue / normalizationConstant;
 }
 
-constexpr inline float SimpleSmoothinKernalDerivative2D( float radius, float distance )
+constexpr inline float SimpleSmoothinKernalDerivative2D( float radius, float distance ) noexcept
 {
     if ( distance > radius )
     {
@@ -25,6 +25,18 @@ constexpr inline float SimpleSmoothinKernalDerivative2D( float radius, float dis
     }
 
     float smoothingValue        = 2 * distance - 2 * radius;
+    float normalizationConstant = ( PI * radius * radius * radius * radius ) / 6;
+    return smoothingValue / normalizationConstant;
+}
+
+constexpr inline float SimpleSmoothingKernalLaplace2D( float radius, float distance ) noexcept
+{
+    if ( distance > radius )
+    {
+        return 0;
+    }
+
+    float smoothingValue        = 2;
     float normalizationConstant = ( PI * radius * radius * radius * radius ) / 6;
     return smoothingValue / normalizationConstant;
 }
