@@ -73,6 +73,7 @@ struct PhysicsSettings
     const float    FrameTime{ 1.0f / TargetFPS };
     float          RestTime;
     float          InvTimestepMultiplier{ 2.0f };
+    float          SlowMultiplier{ 1.0f };
     bool           Paused{ true };
 
     //-------------------------------------------------------------------------
@@ -285,12 +286,15 @@ private:
 
     //-------------------------------------------------------------------------
 
-    void                 UpdateAirfoil() noexcept;
+    void UpdateAirfoil() noexcept;
+    void AirfoilParticleTeleport() noexcept;
+
     std::vector<Vector2> m_TransformedAirfoilP1;
     std::vector<Vector2> m_TransformedAirfoilP2;
 
     float   m_AFScale{ 1.0f };
     float   m_AFRotation{ 0.0f };
+    float   m_AFSpawningSpeed{ 3.0f };
     Vector2 m_AFOffset{ m_PhysicsSettings.SimulationResolution / 2.0f, m_PhysicsSettings.SimulationResolution / 2.0f };
 
     bool m_AFEnabled{ false };

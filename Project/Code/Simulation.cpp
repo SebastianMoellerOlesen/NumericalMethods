@@ -40,72 +40,11 @@ Simulation::Simulation( uint32_t size )
 
     //-------------------------------------------------------------------------
 
-    rlImGuiSetup( true );
+    rlImGuiSetup( true ); // Darkmode: true
 
     //-------------------------------------------------------------------------
 
     m_DebugSettings.RenderResolution = size;
-
-    //-------------------------------------------------------------------------
-
-    // Assign the points for the BC
-    m_BorderP1.insert( m_BorderP1.begin(), { { 0, 0 }, { m_PhysicsSettings.SimulationResolution, 0 }, { m_PhysicsSettings.SimulationResolution, m_PhysicsSettings.SimulationResolution }, { 0, m_PhysicsSettings.SimulationResolution } } );
-    m_BorderP2.insert( m_BorderP2.begin(), { { m_PhysicsSettings.SimulationResolution, 0 }, { m_PhysicsSettings.SimulationResolution, m_PhysicsSettings.SimulationResolution }, { 0, m_PhysicsSettings.SimulationResolution }, { 0, 0 } } );
-
-    //-------------------------------------------------------------------------
-
-    m_Masses = 1.0f;
-
-    //-------------------------------------------------------------------------
-
-    // Generate a random initial position.
-    for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
-    {
-        // Position
-        float x = GetRandomValue( 0.0f, m_DebugSettings.RenderResolution );
-        float y = GetRandomValue( 0.0f, m_DebugSettings.RenderResolution );
-        m_Positions.push_back( Vector2( x, y ) / m_DebugSettings.RenderResolution * m_PhysicsSettings.SimulationResolution );
-
-        //-------------------------------------------------------------------------
-
-        float dx = 0.0f;
-        float dy = 0.0f;
-
-        // Set a random velocity:
-        // float max = 5.0f;
-        // dx        = GetRandomValue( -max, max );
-        // dy        = GetRandomValue( -max, max );;
-
-        m_Velocities.push_back( Vector2( dx, dy ) );
-
-        //-------------------------------------------------------------------------
-
-        m_ParticleColors.push_back( BLUE );
-
-        //-------------------------------------------------------------------------
-    }
-
-    //-------------------------------------------------------------------------
-
-    // Initilize the boxes.
-    m_GridIndices.resize( m_PhysicsSettings.ParticleCount );
-    UpdateGridIndices();
-
-    //-------------------------------------------------------------------------
-
-    UpdateAirfoil();
-
-    //-------------------------------------------------------------------------
-
-    // Initialize the fields.
-    m_Densities.resize( m_PhysicsSettings.ParticleCount );
-    UpdateDensities();
-
-    m_Pressures.resize( m_PhysicsSettings.ParticleCount );
-    UpdatePressures();
-
-    m_PressureGradiants.resize( m_PhysicsSettings.ParticleCount );
-    UpdatePressureGradiant();
 
     //-------------------------------------------------------------------------
 
@@ -314,63 +253,43 @@ std::span<int32_t> Simulation::GetParticlesInCell( int32_t i ) noexcept
 }
 
 //-------------------------------------------------------------------------
+
 void Simulation::Run() noexcept
 {
+
     while ( !WindowShouldClose() )
     {
 
+        //-------------------------------------------------------------------------
+
         Render();
+
+        //-------------------------------------------------------------------------
+
+        // Avoid Updating inf times, when trying to change the radius...
         if ( m_PhysicsSettings.SmoothingRadius == 0 )
         {
             continue;
         }
 
-        m_PhysicsSettings.RestTime += m_PhysicsSettings.FrameTime;
+        //-------------------------------------------------------------------------
 
-        float timestep = m_PhysicsSettings.SmoothingRadius / std::sqrt( m_PhysicsSettings.PressureMultiplier ) / m_PhysicsSettings.InvTimestepMultiplier;
-        timestep       = timestep > m_PhysicsSettings.FrameTime ? m_PhysicsSettings.FrameTime : timestep;
+        float slowdown = m_PhysicsSettings.SlowMultiplier < 1e-3f ? 1.0f : m_PhysicsSettings.SlowMultiplier;
+
+        m_PhysicsSettings.RestTime += m_PhysicsSettings.FrameTime / slowdown;
+        float timestep              = m_PhysicsSettings.SmoothingRadius / std::sqrt( m_PhysicsSettings.PressureMultiplier ) / m_PhysicsSettings.InvTimestepMultiplier;
+        timestep                    = timestep > m_PhysicsSettings.FrameTime ? m_PhysicsSettings.FrameTime : timestep;
+
+        //-------------------------------------------------------------------------
 
         while ( m_PhysicsSettings.RestTime >= timestep )
         {
             Update( timestep );
             m_PhysicsSettings.RestTime -= timestep;
         }
-    }
-}
-
-void Simulation::Restart() noexcept
-{
-    for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
-    {
-        // Position
-        float x        = GetRandomValue( 0.0f, m_DebugSettings.RenderResolution );
-        float y        = GetRandomValue( 0.0f, m_DebugSettings.RenderResolution );
-        m_Positions[i] = Vector2( x, y ) / m_DebugSettings.RenderResolution * m_PhysicsSettings.SimulationResolution;
-
-        //-------------------------------------------------------------------------
-
-        float dx = 0.0f;
-        float dy = 0.0f;
-
-        // Set a random velocity:
-        // float max = 5.0f;
-        // dx        = GetRandomValue( -max, max );
-        // dy        = GetRandomValue( -max, max );;
-
-        m_Velocities[i] = Vector2( dx, dy );
 
         //-------------------------------------------------------------------------
     }
-
-    // Initialize the fields.
-    m_Densities.resize( m_PhysicsSettings.ParticleCount );
-    UpdateDensities();
-
-    m_Pressures.resize( m_PhysicsSettings.ParticleCount );
-    UpdatePressures();
-
-    m_PressureGradiants.resize( m_PhysicsSettings.ParticleCount );
-    UpdatePressureGradiant();
 }
 
 void Simulation::InitSandbox( /* Change this to take a bool, on whether or not to reset settings */ ) noexcept
@@ -382,8 +301,11 @@ void Simulation::InitSandbox( /* Change this to take a bool, on whether or not t
     m_PhysicsSettings.ApplyGravity       = false;
     m_PhysicsSettings.ApplyMouseForce    = false;
 
+    m_PhysicsSettings.SlowMultiplier = 1.0f;
+
     //-------------------------------------------------------------------------
 
+    m_Masses                                = 1.0f;
     m_PhysicsSettings.Paused                = true;
     m_PhysicsSettings.ParticleCount         = 2000;
     m_PhysicsSettings.SmoothingRadius       = 0.35;
@@ -402,6 +324,10 @@ void Simulation::InitSandbox( /* Change this to take a bool, on whether or not t
     m_DebugSettings.Field            = DebugField::Density;
     m_DebugSettings.DebugFieldMiddle = 10.0f;
     m_DebugSettings.DebugFieldMax    = 30.0f;
+
+    //-------------------------------------------------------------------------
+
+    m_AFEnabled = false;
 
     //-------------------------------------------------------------------------
 
@@ -432,6 +358,109 @@ void Simulation::InitSandbox( /* Change this to take a bool, on whether or not t
 
     //-------------------------------------------------------------------------
 
+    UpdateGridIndices();
+
+    //-------------------------------------------------------------------------
+
+    // Initialize the fields.
+    m_Densities.resize( m_PhysicsSettings.ParticleCount );
+    UpdateDensities();
+
+    m_Pressures.resize( m_PhysicsSettings.ParticleCount );
+    UpdatePressures();
+
+    m_PressureGradiants.resize( m_PhysicsSettings.ParticleCount );
+    UpdatePressureGradiant();
+
+    // Avoid the density only being drawn, when we unpause...
+    DrawDensity(); // <- Doesn't work for some reason... Or the field is very weak?? WFT... It works after unpausing...
+
+    //-------------------------------------------------------------------------
+
+    // Update the borders, so they are as they should be:
+    m_BorderP1.resize( 0 );
+    m_BorderP2.resize( 0 );
+    m_BorderP1.insert( m_BorderP1.begin(), { { 0, 0 }, { m_PhysicsSettings.SimulationResolution, 0 }, { m_PhysicsSettings.SimulationResolution, m_PhysicsSettings.SimulationResolution }, { 0, m_PhysicsSettings.SimulationResolution } } );
+    m_BorderP2.insert( m_BorderP2.begin(), { { m_PhysicsSettings.SimulationResolution, 0 }, { m_PhysicsSettings.SimulationResolution, m_PhysicsSettings.SimulationResolution }, { 0, m_PhysicsSettings.SimulationResolution }, { 0, 0 } } );
+
+    //-------------------------------------------------------------------------
+}
+
+void Simulation::InitAirfoil( /* Change this to take a bool, on whether or not to reset settings */ ) noexcept
+{
+    //-------------------------------------------------------------------------
+
+    m_PhysicsSettings.ApplyPressureForce = true;
+    m_PhysicsSettings.ApplyViscocity     = true;
+    m_PhysicsSettings.ApplyGravity       = false;
+    m_PhysicsSettings.ApplyMouseForce    = false;
+
+    m_PhysicsSettings.SlowMultiplier = 5.0f;
+
+    //-------------------------------------------------------------------------
+
+    m_Masses                                = 1.0f;
+    m_PhysicsSettings.Paused                = true;
+    m_PhysicsSettings.ParticleCount         = 5000;
+    m_PhysicsSettings.SmoothingRadius       = 0.45f;
+    m_PhysicsSettings.InvTimestepMultiplier = 4.0f; // Large here to avoid them phasing through the airfoil...
+    m_PhysicsSettings.GravityMultiplier     = 0.0f;
+    m_PhysicsSettings.TargetDensity         = 10.0f;
+    m_PhysicsSettings.PressureMultiplier    = 1000.0f;
+    m_PhysicsSettings.Viscocity             = 0.01f;
+    m_PhysicsSettings.Scheme                = UpdateScheme::Implicit;
+
+    //-------------------------------------------------------------------------
+
+    m_DebugSettings.Draw               = true;
+    m_DebugSettings.ParticleDrawRadius = 5.0f;
+
+    m_DebugSettings.Field            = DebugField::None;
+    m_DebugSettings.DebugFieldMiddle = 30.0f;
+    m_DebugSettings.DebugFieldMax    = 70.0f;
+
+    //-------------------------------------------------------------------------
+
+    m_AFEnabled  = true;
+    m_AFScale    = 2.0f;
+    m_AFRotation = 4.7f;
+    m_AFOffset   = { 0.0f, 4.4f };
+    UpdateAirfoil();
+
+    //-------------------------------------------------------------------------
+
+    uint32_t particleCount = m_PhysicsSettings.ParticleCount;
+    m_Positions.resize( particleCount );
+    m_Velocities.resize( particleCount );
+    m_ParticleColors.assign( particleCount, BLUE );
+
+    //-------------------------------------------------------------------------
+
+    // For the sandbox, we initialilze the particles randomly, without velocity.
+    for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
+    {
+        // Position
+        float x        = RandomFloat( -1.0f, m_PhysicsSettings.SimulationResolution + 5.0f );
+        float y        = RandomFloat( 0.0f, m_PhysicsSettings.SimulationResolution );
+        m_Positions[i] = Vector2( x, y );
+
+        //-------------------------------------------------------------------------
+
+        float dx = m_AFSpawningSpeed;
+        float dy = 0.0f;
+
+        m_Velocities[i] = Vector2( dx, dy );
+
+        //-------------------------------------------------------------------------
+    }
+
+    //-------------------------------------------------------------------------
+
+    m_GridIndices.resize( m_PhysicsSettings.ParticleCount );
+    UpdateGridIndices();
+
+    //-------------------------------------------------------------------------
+
     // Initialize the fields.
     m_Densities.resize( m_PhysicsSettings.ParticleCount );
     UpdateDensities();
@@ -450,13 +479,13 @@ void Simulation::InitSandbox( /* Change this to take a bool, on whether or not t
     // Update the borders, so they are as they should be:
     m_BorderP1.resize( 0 );
     m_BorderP2.resize( 0 );
-    m_BorderP1.insert( m_BorderP1.begin(), { { 0, 0 }, { m_PhysicsSettings.SimulationResolution, 0 }, { m_PhysicsSettings.SimulationResolution, m_PhysicsSettings.SimulationResolution }, { 0, m_PhysicsSettings.SimulationResolution } } );
-    m_BorderP2.insert( m_BorderP2.begin(), { { m_PhysicsSettings.SimulationResolution, 0 }, { m_PhysicsSettings.SimulationResolution, m_PhysicsSettings.SimulationResolution }, { 0, m_PhysicsSettings.SimulationResolution }, { 0, 0 } } );
+    m_BorderP1.insert( m_BorderP1.begin(), { { 0, 0 }, { m_PhysicsSettings.SimulationResolution, m_PhysicsSettings.SimulationResolution }, { -3, m_PhysicsSettings.SimulationResolution } } );
+    m_BorderP2.insert( m_BorderP2.begin(), { { m_PhysicsSettings.SimulationResolution, 0 }, { 0, m_PhysicsSettings.SimulationResolution }, { -3, 0 } } );
+
+    //-------------------------------------------------------------------------
 }
 
 //-------------------------------------------------------------------------
-
-void Simulation::SetScheme( UpdateScheme scheme ) noexcept { m_PhysicsSettings.Scheme = scheme; }
 
 void Simulation::Update( float timestep ) noexcept
 {
@@ -657,8 +686,8 @@ void Simulation::HandleBoundary() noexcept
             // Or inside, if the points are counter clockwise...
             if ( offset > 0 )
             {
-                pos += normal * offset;                                  // Reflect the travel
-                vel -= normal * Vector2DotProduct( vel, normal ) * 1.15; // Reflect the particle.
+                pos += normal * offset * 2;                           // Reflect the travel
+                vel -= normal * Vector2DotProduct( vel, normal ) * 2; // Reflect the particle.
             }
         }
 
@@ -702,10 +731,15 @@ void Simulation::HandleBoundary() noexcept
             // Or inside, if the points are counter clockwise...
             if ( offset > 0 )
             {
-                pos += normal * offset;                                  // Reflect the travel
-                vel -= normal * Vector2DotProduct( vel, normal ) * 1.15; // Reflect the particle.
+                pos += normal * offset;
+                vel -= normal * Vector2DotProduct( vel, normal );
             }
         }
+    }
+
+    if ( m_AFEnabled )
+    {
+        AirfoilParticleTeleport();
     }
 }
 
@@ -956,6 +990,39 @@ void Simulation::UpdateAirfoil() noexcept
     }
 }
 
+void Simulation::AirfoilParticleTeleport() noexcept
+{
+
+    int32_t colorHere  = GetGridIndex( { m_AFOffset.x - 0.5f, m_PhysicsSettings.SimulationResolution / 2.0f } );
+    int32_t colorHere2 = GetGridIndex( { m_AFOffset.x - 0.5f, m_PhysicsSettings.SimulationResolution / 2.0f - 1.0f } );
+
+    std::for_each( std::execution::par_unseq, m_SortedParticles.begin(), m_SortedParticles.end(), [this, &colorHere, &colorHere2]( int32_t index ) {
+        Vector2& pos = m_Positions[index];
+        if ( pos.x > m_PhysicsSettings.SimulationResolution + 5 )
+        {
+            pos.x                 = -1.0f;
+            m_Velocities[index].x = m_AFSpawningSpeed;
+            // m_ParticleColors[index] = BLUE;
+        }
+
+        int32_t particleIdx = GetGridIndex( pos );
+
+        if ( colorHere == particleIdx )
+        {
+            m_ParticleColors[index] = GREEN;
+        }
+        if ( colorHere2 == particleIdx )
+        {
+            m_ParticleColors[index] = LIME;
+        }
+
+        if ( pos.x > m_AFOffset.x - 0.75f && pos.x < m_AFOffset.x - 0.5f )
+        {
+            m_ParticleColors[index] = BLUE;
+        }
+    } );
+}
+
 //-------------------------------------------------------------------------
 
 void Simulation::Render() noexcept
@@ -1018,7 +1085,12 @@ void Simulation::Render() noexcept
 
     DrawPhysicsOverlay();
     DrawDebugOverlay();
-    DrawAirfoilOverlay();
+
+    if ( m_AFEnabled )
+    {
+        // Enabled for specific presets.
+        DrawAirfoilOverlay();
+    }
 
     //-------------------------------------------------------------------------
 
@@ -1124,7 +1196,10 @@ void Simulation::DrawPhysicsOverlay() noexcept
     ImGui::Text( "%.1f FPS", static_cast<double>( GetFPS() ) );
     ImGui::Checkbox( "Pause", &m_PhysicsSettings.Paused );
     ImGui::SameLine();
+    ImGui::InputFloat( "Slowdown", &m_PhysicsSettings.SlowMultiplier );
     if ( ImGui::Button( "StartSandbox" ) ) { InitSandbox(); }
+    ImGui::SameLine();
+    if ( ImGui::Button( "StartAirfoil" ) ) { InitAirfoil(); }
     ImGui::SliderFloat( " InvTimestepMultiplier ", &m_PhysicsSettings.InvTimestepMultiplier, 1.0f, 10.0f );
 
     //-------------------------------------------------------------------------
@@ -1134,11 +1209,9 @@ void Simulation::DrawPhysicsOverlay() noexcept
     //-------------------------------------------------------------------------
 
     ImGui::Text( "Scheme" );
-
-    if ( ImGui::Button( " Explicit " ) ) { SetScheme( UpdateScheme::Explicit ); }
+    if ( ImGui::Button( " Explicit " ) ) { m_PhysicsSettings.Scheme = UpdateScheme::Explicit; }
     ImGui::SameLine();
-    if ( ImGui::Button( " Implicit " ) ) { SetScheme( UpdateScheme::Implicit ); }
-
+    if ( ImGui::Button( " Implicit " ) ) { m_PhysicsSettings.Scheme = UpdateScheme::Implicit; }
     //-------------------------------------------------------------------------
 
     ImGui::Separator();
