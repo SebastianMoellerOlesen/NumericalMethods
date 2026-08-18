@@ -23,6 +23,15 @@ FPS before is roughly 300 for 2k particles.
 The FPS after is roughly 2900, for the same 2k particles.
 The behaviour seems to be the same aswell.
 
+Now that we have increased the performance, we can focus on the requirement for timestep, for stability.
+In general, we wouldn't wan't a particle to be able to travel through another particle within a single timestep.
+Since the speed of sound/information in the fluid is determined by the PressureForce (sqrt(PF) = c), we should simply
+require that dt * c < Smoothing radius => dt < Smoothing radius / c.
+This might also be fun to test, to see if this is true...
+
+We could also do an adaptive step, as it's unlikely that we have particles that are moving that fast.
+For this, we could simply find the fastest particle at each timestep, and apply this speed to find the max deltatime.
+
 I feel like i am in a good place RN, the next thing should be to add more of the forces into the simulation.
 After that, i might be fun to implement the RK4 method, and see how it compares.
 Then make some fun demoes i suppose!

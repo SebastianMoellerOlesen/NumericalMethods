@@ -23,7 +23,8 @@ struct PhysicsSettings
     //-------------------------------------------------------------------------
 
     uint32_t TargetFPS{ 60 };
-    float    DeltaTime{ 1.0f / TargetFPS };
+    float    RestTime;
+    float    FrameTime{ 1.0f / TargetFPS };
     bool     Paused{ true };
 
     //-------------------------------------------------------------------------
@@ -118,11 +119,11 @@ private:
 
     //-------------------------------------------------------------------------
 
-    void Update() noexcept;
+    void Update( float timestep ) noexcept;
 
     void SetScheme( UpdateScheme scheme ) noexcept;
-    void ExplicitUpdate() noexcept;
-    void ImplicitUpdate() noexcept;
+    void ExplicitUpdate( float timestep ) noexcept;
+    void ImplicitUpdate( float timestep ) noexcept;
 
     void UpdateDensities() noexcept; // Currently uses an explicit method, with the current pos, and density.
     void UpdatePressures() noexcept; // Just conversion from Densities to pressure by some method...

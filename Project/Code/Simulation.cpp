@@ -2,6 +2,7 @@
 #include "SmoothingKernals.hpp"
 #include "Utils.hpp"
 
+#include <cmath>
 #include <raylib.h>
 #include <raymath.h>
 #include <imgui.h>
@@ -254,8 +255,24 @@ void Simulation::Run() noexcept
 {
     while ( !WindowShouldClose() )
     {
-        Update();
+
         Render();
+
+        if ( m_PhysicsSettings.SmoothingRadius == 0 )
+        {
+            continue;
+        }
+
+        m_PhysicsSettings.RestTime += m_PhysicsSettings.FrameTime;
+
+        float timestep = m_PhysicsSettings.SmoothingRadius / std::sqrt( m_PhysicsSettings.PressureMultiplier ) / 4.0f;
+        timestep       = timestep > m_PhysicsSettings.FrameTime ? m_PhysicsSettings.FrameTime : timestep;
+
+        while ( m_PhysicsSettings.RestTime >= timestep )
+        {
+            Update( timestep );
+            m_PhysicsSettings.RestTime -= timestep;
+        }
     }
 }
 
@@ -298,7 +315,7 @@ void Simulation::Restart() noexcept
 
 void Simulation::SetScheme( UpdateScheme scheme ) noexcept { m_PhysicsSettings.Scheme = scheme; }
 
-void Simulation::Update() noexcept
+void Simulation::Update( float timestep ) noexcept
 {
 
     if ( m_PhysicsSettings.Paused )
@@ -311,16 +328,16 @@ void Simulation::Update() noexcept
     switch ( m_PhysicsSettings.Scheme )
     {
         case UpdateScheme::Explicit:
-            ExplicitUpdate();
+            ExplicitUpdate( timestep );
             break;
 
         case UpdateScheme::Implicit:
-            ImplicitUpdate();
+            ImplicitUpdate( timestep );
             break;
     }
 }
 
-void Simulation::ImplicitUpdate() noexcept
+void Simulation::ImplicitUpdate( float timestep ) noexcept
 {
 
     //-------------------------------------------------------------------------
@@ -334,7 +351,7 @@ void Simulation::ImplicitUpdate() noexcept
     for ( uint32_t i = 0; i < m_Positions.size(); i++ )
     {
         // Precict positions.
-        m_Positions[i] += m_Velocities[i] * m_PhysicsSettings.DeltaTime;
+        m_Positions[i] += m_Velocities[i] * timestep;
     }
 
     HandleBorderCollision();
@@ -357,7 +374,7 @@ void Simulation::ImplicitUpdate() noexcept
     {
         for ( uint32_t i = 0; i < m_Positions.size(); i++ )
         {
-            m_Velocities[i] += m_PressureGradiants[i] / m_Densities[i] * m_PhysicsSettings.DeltaTime;
+            m_Velocities[i] += m_PressureGradiants[i] / m_Densities[i] * timestep;
         }
     }
 
@@ -365,7 +382,7 @@ void Simulation::ImplicitUpdate() noexcept
     {
         for ( uint32_t i = 0; i < m_Positions.size(); i++ )
         {
-            m_Velocities[i] += Vector2( 0.0f, 1.0f ) * m_PhysicsSettings.GravityMultiplier * m_PhysicsSettings.DeltaTime;
+            m_Velocities[i] += Vector2( 0.0f, 1.0f ) * m_PhysicsSettings.GravityMultiplier * timestep;
         }
     }
 
@@ -386,7 +403,7 @@ void Simulation::ImplicitUpdate() noexcept
 
     for ( uint32_t i = 0; i < m_Positions.size(); i++ )
     {
-        m_Positions[i] += m_Velocities[i] * m_PhysicsSettings.DeltaTime;
+        m_Positions[i] += m_Velocities[i] * timestep;
     }
 
     //-------------------------------------------------------------------------
@@ -396,7 +413,7 @@ void Simulation::ImplicitUpdate() noexcept
     HandleBorderCollision();
 }
 
-void Simulation::ExplicitUpdate() noexcept
+void Simulation::ExplicitUpdate( float timestep ) noexcept
 {
 
     //-------------------------------------------------------------------------
@@ -413,7 +430,7 @@ void Simulation::ExplicitUpdate() noexcept
     {
         for ( uint32_t i = 0; i < m_Positions.size(); i++ )
         {
-            m_Velocities[i] += m_PressureGradiants[i] / m_Densities[i] * m_PhysicsSettings.DeltaTime;
+            m_Velocities[i] += m_PressureGradiants[i] / m_Densities[i] * timestep;
         }
     }
 
@@ -421,13 +438,13 @@ void Simulation::ExplicitUpdate() noexcept
     {
         for ( uint32_t i = 0; i < m_Positions.size(); i++ )
         {
-            m_Velocities[i] += Vector2( 0.0f, 1.0f ) * m_PhysicsSettings.GravityMultiplier * m_PhysicsSettings.DeltaTime;
+            m_Velocities[i] += Vector2( 0.0f, 1.0f ) * m_PhysicsSettings.GravityMultiplier * timestep;
         }
     }
 
     for ( uint32_t i = 0; i < m_Positions.size(); i++ )
     {
-        m_Positions[i] += m_Velocities[i] * m_PhysicsSettings.DeltaTime;
+        m_Positions[i] += m_Velocities[i] * timestep;
     }
 
     //-------------------------------------------------------------------------
