@@ -2,6 +2,8 @@
 #include "SmoothingKernals.hpp"
 #include "Utils.hpp"
 
+#include <iostream>
+#include <numeric>
 #include <raylib.h>
 #include <raymath.h>
 #include <imgui.h>
@@ -135,12 +137,57 @@ Vector2 Simulation::WorldSpaceToScreenSpace( Vector2 WS ) noexcept
 
 //-------------------------------------------------------------------------
 
+void Simulation::UpdateGridDims() noexcept
+{
+    float min_x = std::min_element( std::execution::par_unseq, m_Positions.begin(), m_Positions.end(),
+                                    []( const Vector2& a, const Vector2& b ) { return a.x < b.x; } )
+                      ->x;
+
+    //-------------------------------------------------------------------------
+
+    float min_y = std::min_element( std::execution::par_unseq, m_Positions.begin(), m_Positions.end(),
+                                    []( const Vector2& a, const Vector2& b ) { return a.y < b.y; } )
+                      ->y;
+
+    //-------------------------------------------------------------------------
+
+    float max_x = std::max_element( std::execution::par_unseq, m_Positions.begin(), m_Positions.end(),
+                                    []( const Vector2& a, const Vector2& b ) { return a.x < b.x; } )
+                      ->x;
+
+    //-------------------------------------------------------------------------
+
+    float max_y = std::max_element( std::execution::par_unseq, m_Positions.begin(), m_Positions.end(),
+                                    []( const Vector2& a, const Vector2& b ) { return a.y < b.y; } )
+                      ->y;
+
+    //-------------------------------------------------------------------------
+
+    float radius = m_PhysicsSettings.SmoothingRadius;
+
+    m_MinCol = min_x / radius;
+    m_MaxCol = max_x / radius;
+    m_MinRow = min_y / radius;
+    m_MaxRow = max_y / radius;
+
+    m_GridWidth  = m_MaxCol - m_MinCol + 1;
+    m_GridHeight = m_MaxRow - m_MinRow + 1;
+    m_CellCount  = m_GridWidth * m_GridHeight;
+}
+
 int32_t Simulation::GetGridIndex( Vector2 pos ) noexcept
 {
-    pos        /= m_PhysicsSettings.SmoothingRadius;
-    uint32_t x  = pos.x; // Should floor, if bugs, mabey this is rounding...
-    uint32_t y  = pos.y; // -| |-
-    return x + y * m_GridAxisSize;
+    pos /= m_PhysicsSettings.SmoothingRadius;
+
+    // Old version.
+    // int32_t x  = pos.x; // Should floor, if bugs, mabey this is rounding...
+    // int32_t y  = pos.y; // -| |-
+
+    int32_t x = pos.x - m_MinCol;
+    int32_t y = pos.y - m_MinRow;
+
+    // return x + y * m_GridAxisSize;
+    return x + y * m_GridWidth;
 }
 
 //-------------------------------------------------------------------------
@@ -150,11 +197,15 @@ void Simulation::UpdateGridIndices() noexcept
 
     //-------------------------------------------------------------------------
 
-    m_GridAxisSize = m_PhysicsSettings.SimulationResolution / m_PhysicsSettings.SmoothingRadius;
-    ++m_GridAxisSize; // We increment by one, to account for any potential flooring. Having this be one larger than necessary won't matter.
+    // Old version.
+    // m_GridAxisSize = m_PhysicsSettings.SimulationResolution / m_PhysicsSettings.SmoothingRadius;
+    // ++m_GridAxisSize; // We increment by one, to account for any potential flooring. Having this be one larger than necessary won't matter.
+
+    UpdateGridDims();
 
     //-------------------------------------------------------------------------
 
+    // Get the index for each particle...
     std::for_each( std::execution::par_unseq, m_Positions.begin(), m_Positions.end(), [this]( const Vector2& pos ) {
         size_t i         = &pos - m_Positions.data();
         m_GridIndices[i] = GetGridIndex( pos );
@@ -162,9 +213,18 @@ void Simulation::UpdateGridIndices() noexcept
 
     //-------------------------------------------------------------------------
 
-    uint32_t cellCount = m_GridAxisSize * m_GridAxisSize;
+    // Old version
+    // uint32_t cellCount = m_GridAxisSize * m_GridAxisSize;
+
+    uint32_t cellCount = m_CellCount;
+    std::cout << cellCount << std::endl;
 
     //-------------------------------------------------------------------------
+
+    // This should be fine for the new version.
+    // We do however have a massive problem, if some particle goes -> inf...
+    // As we will need to allocate a MASSIVE amount of storage...
+    // Mabey do some check somewhere, (if len(pos) > threshold) { delete particle, or reset it... }
 
     // Reset the indexing.
     // We use cellCount + 1, so we can easily acces the indices that belong to a cell, by just taking all the indices between [cellindex] -> [cellindex + 1]
@@ -178,8 +238,6 @@ void Simulation::UpdateGridIndices() noexcept
 
     // Now we sort the particles.
     m_SortedParticles.resize( m_GridIndices.size() );
-
-    //-------------------------------------------------------------------------
 
     // Track where we should place the next particle, that belongs to a specific cell.
     std::vector<int32_t> NextIndex = m_CellStart;
@@ -204,8 +262,12 @@ std::vector<int32_t> Simulation::GetNeighbourCells( int32_t i ) noexcept
 
     //-------------------------------------------------------------------------
 
-    int32_t col = i % m_GridAxisSize;
-    int32_t row = i / m_GridAxisSize;
+    // Old
+    // int32_t col = i % m_GridAxisSize;
+    // int32_t row = i / m_GridAxisSize;
+
+    int32_t col = i % m_GridWidth;
+    int32_t row = i / m_GridWidth;
 
     //-------------------------------------------------------------------------
 
@@ -224,9 +286,9 @@ std::vector<int32_t> Simulation::GetNeighbourCells( int32_t i ) noexcept
 
             // Check if the location is within bound.
             // Note this needs to be reworked, if implementing something like ghost cells.
-            if ( c > 0 || c < m_GridAxisSize || r > 0 || r < m_GridAxisSize )
+            if ( c >= 0 && c < m_GridWidth && r >= 0 && r < m_GridHeight )
             {
-                neighbours.push_back( c + r * m_GridAxisSize );
+                neighbours.push_back( c + r * m_GridWidth );
             }
         }
     }
@@ -353,7 +415,7 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
         m_Positions[i] += m_Velocities[i] * timestep;
     }
 
-    HandleBorderCollision();
+    HandleBoundary();
     //-------------------------------------------------------------------------
 
     // Update velocity implicitly.
@@ -424,7 +486,7 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
 
     // Make sure the balls stay inside the box.
     // Acts like a reflective BC i guess...
-    HandleBorderCollision();
+    HandleBoundary();
 }
 
 void Simulation::ExplicitUpdate( float timestep ) noexcept
@@ -487,12 +549,12 @@ void Simulation::ExplicitUpdate( float timestep ) noexcept
 
     // Make sure the balls stay inside the box.
     // Acts like a reflective BC i guess...
-    HandleBorderCollision();
+    HandleBoundary();
 }
 
 //-------------------------------------------------------------------------
 
-void Simulation::HandleBorderCollision() noexcept
+void Simulation::HandleBoundary() noexcept
 {
     for ( uint32_t i = 0; i < m_Positions.size(); i++ )
     {
@@ -982,12 +1044,6 @@ void Simulation::DrawDebugOverlay() noexcept
         ImGui::SliderFloat( "Debug field min", &m_DebugSettings.DebugFieldMin, -100.0f, 0.0f );
     }
 
-    ImGui::End();
-
-    // Just debug stuff...
-    ImGui::Begin( "DEBUG" );
-    ImGui::Text( " The axis size of the grid is currently: %i ", m_GridAxisSize );
-    ImGui::Text( " This gives a simulation width of: %.02f ", m_GridAxisSize * m_PhysicsSettings.SmoothingRadius );
     ImGui::End();
 }
 

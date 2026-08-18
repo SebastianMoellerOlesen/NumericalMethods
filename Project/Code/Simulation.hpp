@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <span>
+#include <utility>
 #include <vector>
 
 //-------------------------------------------------------------------------
@@ -159,7 +160,7 @@ private:
     //-------------------------------------------------------------------------
 
     // Boundary Conditions:
-    void HandleBorderCollision() noexcept; // Reflection ish...
+    void HandleBoundary() noexcept; // Reflection ish...
 
     //-------------------------------------------------------------------------
 
@@ -169,12 +170,27 @@ private:
 
     //-------------------------------------------------------------------------
 
+    // All defined in regards to the SmoothingRadius.
+    int32_t m_MinCol; // The particle most to the left.
+    int32_t m_MaxCol; // The particle most to the right.
+    int32_t m_MinRow; // The particle most towards the top
+    int32_t m_MaxRow; // The particle most to the bottom.
+
+    uint32_t m_GridWidth;
+    uint32_t m_GridHeight;
+    uint32_t m_CellCount;
+
+    void UpdateGridDims() noexcept;
+
+    //-------------------------------------------------------------------------
+
     // To be able to scale the stuff, at runtime,
     // we need to compute the grid for each particle each frame.
-    void                 UpdateGridIndices() noexcept;
-    int32_t              GetGridIndex( Vector2 pos ) noexcept;
-    std::vector<int32_t> GetNeighbourCells( int32_t i ) noexcept;
-    std::span<int32_t>   GetParticlesInCell( int32_t i ) noexcept;
+    std::pair<int32_t, int32_t> GetCellCount() noexcept;
+    void                        UpdateGridIndices() noexcept;
+    int32_t                     GetGridIndex( Vector2 pos ) noexcept;
+    std::vector<int32_t>        GetNeighbourCells( int32_t i ) noexcept;
+    std::span<int32_t>          GetParticlesInCell( int32_t i ) noexcept;
     // Would be a nice API, to just do ForEachSurrounding(index, []() {update}) // Just for the future, if i have time.
 
     //-------------------------------------------------------------------------
