@@ -1453,6 +1453,7 @@ void Simulation::DrawAirfoilOverlay() noexcept
         ImGui::SliderFloat( " Offset-Y ", &m_AFOffset.y, 0.0f, m_PhysicsSettings.SimulationResolution );
         ImGui::SliderFloat( " Scale ", &m_AFScale, 0.0f, 10.0f );
         ImGui::SliderFloat( " Rotation ", &m_AFRotation, 0.0f, 2 * PI );
+        ImGui::SliderFloat( " AirSpeed ", &m_AFSpawningSpeed, 0.0f, 100.0f );
     }
     ImGui::End();
 }
