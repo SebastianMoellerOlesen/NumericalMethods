@@ -406,7 +406,7 @@ void Simulation::InitAirfoil( /* Change this to take a bool, on whether or not t
 
     m_Masses                                = 1.0f;
     m_PhysicsSettings.Paused                = true;
-    m_PhysicsSettings.ParticleCount         = 10000;
+    m_PhysicsSettings.ParticleCount         = 5000;
     m_PhysicsSettings.SmoothingRadius       = 0.45f;
     m_PhysicsSettings.InvTimestepMultiplier = 4.0f; // Large here to avoid them phasing through the airfoil...
     m_PhysicsSettings.GravityMultiplier     = 0.0f;
@@ -528,8 +528,6 @@ void Simulation::Update( float timestep ) noexcept
 void Simulation::ExplicitUpdate( float timestep ) noexcept
 {
 
-    PrintLenImpulse();
-
     //-------------------------------------------------------------------------
 
     // We make use of operator splitting.
@@ -609,32 +607,6 @@ void Simulation::ExplicitUpdate( float timestep ) noexcept
 void Simulation::ImplicitUpdate( float timestep ) noexcept
 {
 
-    PrintLenImpulse();
-
-    //-------------------------------------------------------------------------
-
-    UpdateGridIndices();
-    UpdateDensities();
-    UpdateViscocity();
-
-    //-------------------------------------------------------------------------
-
-    if ( m_PhysicsSettings.ApplyGravity )
-    {
-        for ( uint32_t i = 0; i < m_Positions.size(); i++ )
-        {
-            m_Velocities[i] += Vector2( 0.0f, 1.0f ) * m_PhysicsSettings.GravityMultiplier * timestep;
-        }
-    }
-
-    if ( m_PhysicsSettings.ApplyViscocity )
-    {
-        for ( uint32_t i = 0; i < m_Positions.size(); i++ )
-        {
-            m_Velocities[i] += m_ViscocityForces[i] * timestep / m_Densities[i];
-        }
-    }
-
     //-------------------------------------------------------------------------
 
     if ( ( IsMouseButtonDown( MOUSE_LEFT_BUTTON ) || IsMouseButtonDown( MOUSE_RIGHT_BUTTON ) ) && m_PhysicsSettings.ApplyMouseForce )
@@ -679,7 +651,8 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
 
             //-------------------------------------------------------------------------
 
-            lastIterPos = m_Positions;
+            m_Velocities = originalVel;
+            lastIterPos  = m_Positions;
             iteration++;
 
             // Update using the positions from the last iteration.
@@ -687,6 +660,26 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
             UpdateDensities();
             UpdatePressures();
             UpdatePressureGradiant();
+            UpdateDensities();
+            UpdateViscocity();
+
+            //-------------------------------------------------------------------------
+
+            if ( m_PhysicsSettings.ApplyGravity )
+            {
+                for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+                {
+                    m_Velocities[i] += Vector2( 0.0f, 1.0f ) * m_PhysicsSettings.GravityMultiplier * timestep;
+                }
+            }
+
+            if ( m_PhysicsSettings.ApplyViscocity )
+            {
+                for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+                {
+                    m_Velocities[i] += m_ViscocityForces[i] * timestep / m_Densities[i];
+                }
+            }
 
             //-------------------------------------------------------------------------
 
@@ -695,7 +688,8 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
             for ( uint32_t i = 0; i < m_Positions.size(); i++ )
             {
                 // We calculate the position for the next iteration.
-                m_Positions[i] = originalPos[i] + originalVel[i] * timestep + m_PressureGradiants[i] * timestep * timestep / m_Densities[i];
+                // m_Positions[i] = originalPos[i] + originalVel[i] * timestep + m_PressureGradiants[i] * timestep * timestep / m_Densities[i];
+                m_Positions[i] = originalPos[i] + m_Velocities[i] * timestep + m_PressureGradiants[i] * timestep * timestep / m_Densities[i];
             }
 
             //-------------------------------------------------------------------------
@@ -835,8 +829,8 @@ void Simulation::HandleBoundary() noexcept
             // Or inside, if the points are counter clockwise...
             if ( offset > 0 )
             {
-                pos += normal * offset;                                  // We don't reflect here, as it messes with the implicit solver.
-                vel -= normal * Vector2DotProduct( vel, normal ) * 1.90; // Reflect the particle.
+                pos += normal * offset * 2;                           // We don't reflect here, as it messes with the implicit solver.
+                vel -= normal * Vector2DotProduct( vel, normal ) * 2; // Reflect the particle.
             }
         }
 
@@ -880,8 +874,8 @@ void Simulation::HandleBoundary() noexcept
             // Or inside, if the points are counter clockwise...
             if ( offset > 0 )
             {
-                pos += normal * offset * 1.90;
-                vel -= normal * Vector2DotProduct( vel, normal ) * 1.90;
+                pos += normal * offset;
+                vel -= normal * Vector2DotProduct( vel, normal );
             }
         }
     }

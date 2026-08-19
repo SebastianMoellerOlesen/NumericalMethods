@@ -1,9 +1,7 @@
 #pragma once
 
 #include <cmath>
-#include <iostream>
 #include <raylib.h>
-#include "raymath.h"
 
 #include <cstdint>
 #include <span>
