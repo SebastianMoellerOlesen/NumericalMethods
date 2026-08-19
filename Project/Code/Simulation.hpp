@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cmath>
+#include <iostream>
 #include <raylib.h>
+#include "raymath.h"
 
 #include <cstdint>
 #include <span>
@@ -83,6 +85,7 @@ struct PhysicsSettings
     const float  SimulationResolution{ 10.0f }; // X and Y are same scale...
     uint32_t     ParticleCount{ 2000 };
     UpdateScheme Scheme{ UpdateScheme::Leapfrog };
+    int32_t      ImplicitMaxIterations{ 20 }; // ImGui doesn't take uint
 
     //-------------------------------------------------------------------------
 
@@ -304,8 +307,6 @@ private:
     Vector2 m_AFOffset{ m_PhysicsSettings.SimulationResolution / 2.0f, m_PhysicsSettings.SimulationResolution / 2.0f };
 
     bool m_AFEnabled{ false };
-
-    //-------------------------------------------------------------------------
 
     //-------------------------------------------------------------------------
 };

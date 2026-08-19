@@ -2,7 +2,6 @@
 #include "SmoothingKernals.hpp"
 #include "Utils.hpp"
 
-#include <iostream>
 #include <raylib.h>
 #include <raymath.h>
 #include <imgui.h>
@@ -407,7 +406,7 @@ void Simulation::InitAirfoil( /* Change this to take a bool, on whether or not t
 
     m_Masses                                = 1.0f;
     m_PhysicsSettings.Paused                = true;
-    m_PhysicsSettings.ParticleCount         = 5000;
+    m_PhysicsSettings.ParticleCount         = 10000;
     m_PhysicsSettings.SmoothingRadius       = 0.45f;
     m_PhysicsSettings.InvTimestepMultiplier = 4.0f; // Large here to avoid them phasing through the airfoil...
     m_PhysicsSettings.GravityMultiplier     = 0.0f;
@@ -529,6 +528,8 @@ void Simulation::Update( float timestep ) noexcept
 void Simulation::ExplicitUpdate( float timestep ) noexcept
 {
 
+    PrintLenImpulse();
+
     //-------------------------------------------------------------------------
 
     // We make use of operator splitting.
@@ -608,6 +609,8 @@ void Simulation::ExplicitUpdate( float timestep ) noexcept
 void Simulation::ImplicitUpdate( float timestep ) noexcept
 {
 
+    PrintLenImpulse();
+
     //-------------------------------------------------------------------------
 
     UpdateGridIndices();
@@ -661,19 +664,15 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
         std::vector<float> deltas;
         deltas.resize( m_PhysicsSettings.ParticleCount );
 
-        // VERY IMPORTANT.
-        // FOR THE AIRFOIL WHERE WE TELEPORT; DO WE NEED TO TAKE ANYTHING THERE INTO ACCOUNT?
-        // MABEY NOT; BECAUSE THEY SHOULD TELEPORT EVERY ITERATION.
-
         uint32_t iteration      = 0;
-        uint32_t maxIter        = 1;
+        uint32_t maxIter        = m_PhysicsSettings.ImplicitMaxIterations; // Todo: Make this variable in ImGui!!!
         float    errorThreshold = 0.01f;
 
+        // Helps with the first guess, and gives better convergence.
         for ( uint32_t i = 0; i < m_Positions.size(); i++ )
         {
             m_Positions[i] = originalPos[i] + originalVel[i] * timestep;
         }
-        HandleBoundary();
 
         while ( iteration < maxIter )
         {
@@ -681,6 +680,7 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
             //-------------------------------------------------------------------------
 
             lastIterPos = m_Positions;
+            iteration++;
 
             // Update using the positions from the last iteration.
             UpdateGridIndices();
@@ -710,8 +710,9 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
             if ( largestDelta < errorThreshold ) { break; }
 
             // Increment the interation to avoid inf loop, in case on non-convergence.
-            iteration++;
         }
+
+        // In general, if
 
         // Update the velocity:
         for ( uint32_t i = 0; i < m_Positions.size(); i++ )
@@ -720,8 +721,6 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
         }
 
         HandleBoundary();
-
-        std::cout << "Iterations was: " << iteration << std::endl;
     }
 
     //-------------------------------------------------------------------------
@@ -1367,6 +1366,11 @@ void Simulation::DrawPhysicsOverlay() noexcept
     if ( ImGui::Button( " Leapfrog " ) ) { m_PhysicsSettings.Scheme = UpdateScheme::Leapfrog; }
     ImGui::SameLine();
     if ( ImGui::Button( " RK2 " ) ) { m_PhysicsSettings.Scheme = UpdateScheme::RK2; }
+
+    if ( m_PhysicsSettings.Scheme == UpdateScheme::Implicit )
+    {
+        ImGui::SliderInt( "Max Implicit iterations", &m_PhysicsSettings.ImplicitMaxIterations, 1, 200 );
+    }
 
     ImGui::Text( "Kernal" );
     if ( ImGui::Button( "Poly_6" ) ) { currentKernal = Kernal::Poly6; }
