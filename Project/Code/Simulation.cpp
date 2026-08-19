@@ -396,6 +396,7 @@ void Simulation::InitAirfoil( /* Change this to take a bool, on whether or not t
     m_PhysicsSettings.ApplyMouseForce    = false;
 
     m_PhysicsSettings.SlowMultiplier = 5.0f;
+    currentKernal                    = Kernal::Spiky3;
 
     //-------------------------------------------------------------------------
 
@@ -567,7 +568,7 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
         {
             Vector2 difference = worldPos - m_Positions[i];
             float   distance   = Vector2Length( difference );
-            float   weight     = SimpleSmoothingKernal2D( 2.0f, distance );
+            float   weight     = CurrentSmoothingKernal2D( 2.0f, distance );
 
             m_Velocities[i] += difference / distance * weight * multiplier * m_PhysicsSettings.PressureMultiplier / m_Densities[i];
         }
@@ -646,7 +647,7 @@ void Simulation::ExplicitUpdate( float timestep ) noexcept
         {
             Vector2 difference = worldPos - m_Positions[i];
             float   distance   = Vector2Length( difference );
-            float   weight     = SimpleSmoothingKernal2D( 2.0f, distance );
+            float   weight     = CurrentSmoothingKernal2D( 2.0f, distance );
 
             m_Velocities[i] += difference / distance * weight * multiplier * m_PhysicsSettings.PressureMultiplier / m_Densities[i];
         }
@@ -756,7 +757,7 @@ float Simulation::CalculateDensity( Vector2 location ) noexcept
     for ( int32_t i : neighbourIndices )
     {
         float distance   = Vector2Length( location - m_Positions[i] );
-        float influence  = SimpleSmoothingKernal2D( m_PhysicsSettings.SmoothingRadius, distance );
+        float influence  = CurrentSmoothingKernal2D( m_PhysicsSettings.SmoothingRadius, distance );
         density         += m_Masses * influence;
     }
 
@@ -865,7 +866,7 @@ Vector2 Simulation ::CalculatePressureGradiant( Vector2 location ) noexcept
             difference = GetRandomDir();
         }
 
-        float influence  = SimpleSmoothinKernalDerivative2D( m_PhysicsSettings.SmoothingRadius, distance );
+        float influence  = CurrentSmoothingKernalDerivative2D( m_PhysicsSettings.SmoothingRadius, distance );
         gradient        += Vector2Normalize( difference ) * m_Masses * influence * m_Pressures[i] / m_Densities[i];
     }
 
@@ -911,7 +912,7 @@ Vector2 Simulation::CalculatePressureGradiant( uint32_t index ) noexcept
 
         //-------------------------------------------------------------------------
 
-        float influence        = SimpleSmoothinKernalDerivative2D( m_PhysicsSettings.SmoothingRadius, distance );
+        float influence        = CurrentSmoothingKernalDerivative2D( m_PhysicsSettings.SmoothingRadius, distance );
         float averagePressure  = ( m_Pressures[i] + m_Pressures[index] ) * 0.5f;
         gradient              -= Vector2Normalize( difference ) * m_Masses * influence * averagePressure / m_Densities[i];
 
@@ -951,7 +952,7 @@ Vector2 Simulation::CalculateViscocityForce( uint32_t index ) noexcept
 
         Vector2 difference = m_Positions[index] - m_Positions[i];
         float   distance   = Vector2Length( difference );
-        float   influence  = SimpleSmoothingKernalLaplace2D( m_PhysicsSettings.SmoothingRadius, distance );
+        float   influence  = CurrentSmoothingKernalLaplacian2D( m_PhysicsSettings.SmoothingRadius, distance );
 
         //-------------------------------------------------------------------------
 
@@ -1009,7 +1010,7 @@ void Simulation::AirfoilParticleTeleport() noexcept
 
         if ( colorHere == particleIdx )
         {
-            m_ParticleColors[index] = GREEN;
+            m_ParticleColors[index] = PINK;
         }
         if ( colorHere2 == particleIdx )
         {
@@ -1212,9 +1213,18 @@ void Simulation::DrawPhysicsOverlay() noexcept
     if ( ImGui::Button( " Explicit " ) ) { m_PhysicsSettings.Scheme = UpdateScheme::Explicit; }
     ImGui::SameLine();
     if ( ImGui::Button( " Implicit " ) ) { m_PhysicsSettings.Scheme = UpdateScheme::Implicit; }
-    //-------------------------------------------------------------------------
 
-    ImGui::Separator();
+    ImGui::Text( "Kernal" );
+    if ( ImGui::Button( "Spiky_1" ) ) { currentKernal = Kernal::Spiky1; }
+    ImGui::SameLine();
+    if ( ImGui::Button( "Spiky_2" ) ) { currentKernal = Kernal::Spiky2; }
+    ImGui::SameLine();
+    if ( ImGui::Button( "Spiky_3" ) ) { currentKernal = Kernal::Spiky3; }
+    {
+        //-------------------------------------------------------------------------
+
+        ImGui::Separator();
+    }
 
     //-------------------------------------------------------------------------
 
