@@ -399,7 +399,7 @@ void Simulation::InitAirfoil( /* Change this to take a bool, on whether or not t
     m_PhysicsSettings.ApplyGravity       = false;
     m_PhysicsSettings.ApplyMouseForce    = false;
 
-    m_PhysicsSettings.SlowMultiplier = 5.0f;
+    m_PhysicsSettings.SlowMultiplier = 15.0f;
     currentKernal                    = Kernal::Spiky3;
 
     //-------------------------------------------------------------------------
@@ -408,11 +408,11 @@ void Simulation::InitAirfoil( /* Change this to take a bool, on whether or not t
     m_PhysicsSettings.Paused                = true;
     m_PhysicsSettings.ParticleCount         = 5000;
     m_PhysicsSettings.SmoothingRadius       = 0.45f;
-    m_PhysicsSettings.InvTimestepMultiplier = 4.0f; // Large here to avoid them phasing through the airfoil...
+    m_PhysicsSettings.InvTimestepMultiplier = 5.0f; // Large here to avoid them phasing through the airfoil...
     m_PhysicsSettings.GravityMultiplier     = 0.0f;
     m_PhysicsSettings.TargetDensity         = 10.0f;
-    m_PhysicsSettings.PressureMultiplier    = 1000.0f;
-    m_PhysicsSettings.Viscocity             = 0.01f;
+    m_PhysicsSettings.PressureMultiplier    = 10000.0f;
+    m_PhysicsSettings.Viscocity             = 0.1f;
     m_PhysicsSettings.Scheme                = UpdateScheme::Implicit;
 
     //-------------------------------------------------------------------------
@@ -684,7 +684,6 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
             //-------------------------------------------------------------------------
 
             // We do an update, with something along the likes of newtons method. It not quite that, but close.
-            // float dampingRatio = 0.3f;
             for ( uint32_t i = 0; i < m_Positions.size(); i++ )
             {
                 // We calculate the position for the next iteration.
@@ -716,6 +715,37 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
 
         HandleBoundary();
     }
+
+    else
+    {
+        //-------------------------------------------------------------------------
+
+        if ( m_PhysicsSettings.ApplyGravity )
+        {
+            for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+            {
+                m_Velocities[i] += Vector2( 0.0f, 1.0f ) * m_PhysicsSettings.GravityMultiplier * timestep;
+            }
+        }
+
+        if ( m_PhysicsSettings.ApplyViscocity )
+        {
+            for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+            {
+                m_Velocities[i] += m_ViscocityForces[i] * timestep / m_Densities[i];
+            }
+        }
+
+        // Update the velocity:
+        for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+        {
+            m_Positions[i] += m_Velocities[i] * timestep;
+        }
+
+        HandleBoundary();
+    }
+
+    //-------------------------------------------------------------------------
 
     //-------------------------------------------------------------------------
 }
@@ -829,8 +859,8 @@ void Simulation::HandleBoundary() noexcept
             // Or inside, if the points are counter clockwise...
             if ( offset > 0 )
             {
-                pos += normal * offset * 1.9;
-                vel -= normal * Vector2DotProduct( vel, normal ) * 1.9;
+                pos += normal * offset * 1;
+                vel -= normal * Vector2DotProduct( vel, normal ) * 1.3;
             }
         }
 

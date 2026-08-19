@@ -46,6 +46,5 @@ Should really give the mouse the ability to change ability:
 
 I should really create more kernals, and test them...
 
-Just implemented a proper implicit scheme, by iterating towards the final solution.
 Find a better method, to determine when i has converged. The best idea now, i to just use the acceleration, as that should be independant of deltatime.
 Also implement a stat that shows in the ImGui interface, to see how many updates we have pr second or pr frame.
