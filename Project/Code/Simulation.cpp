@@ -829,8 +829,8 @@ void Simulation::HandleBoundary() noexcept
             // Or inside, if the points are counter clockwise...
             if ( offset > 0 )
             {
-                pos += normal * offset * 2;                           // We don't reflect here, as it messes with the implicit solver.
-                vel -= normal * Vector2DotProduct( vel, normal ) * 2; // Reflect the particle.
+                pos += normal * offset * 1.9;
+                vel -= normal * Vector2DotProduct( vel, normal ) * 1.9;
             }
         }
 
@@ -874,6 +874,8 @@ void Simulation::HandleBoundary() noexcept
             // Or inside, if the points are counter clockwise...
             if ( offset > 0 )
             {
+                // No reflection here.
+                // The airfoil works better without it.
                 pos += normal * offset;
                 vel -= normal * Vector2DotProduct( vel, normal );
             }
