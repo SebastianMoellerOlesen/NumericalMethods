@@ -58,8 +58,10 @@ static inline std::vector<Vector2> AirfoilP2{
 
 enum class UpdateScheme : uint8_t
 {
-    Explicit = 0,
-    Implicit = 1,
+    Explicit,
+    Implicit, // Just pressure... As it is a pain in the ass...
+    Leapfrog,
+    RK2
     // Mabey RK4?
 };
 
@@ -80,7 +82,7 @@ struct PhysicsSettings
 
     const float  SimulationResolution{ 10.0f }; // X and Y are same scale...
     uint32_t     ParticleCount{ 2000 };
-    UpdateScheme Scheme{ UpdateScheme::Implicit };
+    UpdateScheme Scheme{ UpdateScheme::Leapfrog };
 
     //-------------------------------------------------------------------------
 
@@ -176,11 +178,14 @@ private:
     void SetScheme( UpdateScheme scheme ) noexcept;
     void ExplicitUpdate( float timestep ) noexcept;
     void ImplicitUpdate( float timestep ) noexcept;
+    void LeapfrogUpdate( float timestep ) noexcept;
+    void RK2Update( float timestep ) noexcept;
 
     void UpdateDensities() noexcept; // Currently uses an explicit method, with the current pos, and density.
     void UpdatePressures() noexcept; // Just conversion from Densities to pressure by some method...
     void UpdatePressureGradiant() noexcept;
-    void ApplyViscocity( float timestep ) noexcept; // Applies it directly to the velocity.
+
+    void UpdateViscocity() noexcept; // Applies it directly to the velocity.
 
     void Render() noexcept;
 
@@ -271,6 +276,7 @@ private:
     std::vector<float>   m_Densities;
     std::vector<float>   m_Pressures;
     std::vector<Vector2> m_PressureGradiants;
+    std::vector<Vector2> m_ViscocityForces;
 
     // Boundary info:
     //-------------------------------------------------------------------------
