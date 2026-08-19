@@ -18,6 +18,10 @@ static inline Kernal currentKernal = Kernal::Spiky2;
 
 constexpr inline float Poly6Kernal2D( float radius, float distance ) noexcept
 {
+    if ( distance > radius )
+    {
+        return 0;
+    }
     // (r^2 - d ^2)^3
     float smoothingValue        = ( radius * radius - distance * distance ) * ( radius * radius - distance * distance ) * ( radius * radius - distance * distance );
     float normalizationConstant = ( PI * std::pow( radius, 8 ) ) / 4.0f;
@@ -26,6 +30,10 @@ constexpr inline float Poly6Kernal2D( float radius, float distance ) noexcept
 
 constexpr inline float Poly6KernalDerivative2D( float radius, float distance ) noexcept
 {
+    if ( distance > radius )
+    {
+        return 0;
+    }
     float smoothingValue        = ( -2 * distance * ( radius * radius - distance * distance ) * ( radius * radius - distance * distance ) );
     float normalizationConstant = ( PI * std::pow( radius, 8 ) ) / 4.0f;
     return smoothingValue / normalizationConstant;
@@ -33,6 +41,10 @@ constexpr inline float Poly6KernalDerivative2D( float radius, float distance ) n
 
 constexpr inline float Poly6KernalLaplacian2D( float radius, float distance ) noexcept
 {
+    if ( distance > radius )
+    {
+        return 0;
+    }
     float smoothingValue        = ( -2 * ( radius * radius - distance * distance ) * ( radius * radius - distance * distance ) ) + 4 * radius * radius * ( radius * radius - distance * distance );
     float normalizationConstant = ( PI * std::pow( radius, 8 ) ) / 4.0f;
     return smoothingValue / normalizationConstant;
@@ -42,6 +54,10 @@ constexpr inline float Poly6KernalLaplacian2D( float radius, float distance ) no
 
 constexpr inline float SpikyKernal2D( float radius, float distance ) noexcept
 {
+    if ( distance > radius )
+    {
+        return 0;
+    }
     float smoothingValue        = radius - distance;
     float normalizationConstant = PI * radius * radius * radius / 3.0f;
     return smoothingValue / normalizationConstant;
@@ -49,6 +65,10 @@ constexpr inline float SpikyKernal2D( float radius, float distance ) noexcept
 
 constexpr inline float SpikyKernalDerivative2D( float radius, float distance ) noexcept
 {
+    if ( distance > radius )
+    {
+        return 0;
+    }
     float smoothingValue        = -1.0f;
     float normalizationConstant = PI * radius * radius * radius / 3.0f;
     return smoothingValue / normalizationConstant;
@@ -64,6 +84,10 @@ constexpr inline float SpikyKernalLaplacian2D( float radius, float distance ) no
 // The integral is equal to one
 constexpr inline float Spiky2SmoothingKernal2D( float radius, float distance ) noexcept
 {
+    if ( distance > radius )
+    {
+        return 0;
+    }
     float smoothingValue        = ( radius - distance ) * ( radius - distance );
     float normalizationConstant = ( PI * radius * radius * radius * radius ) / 6;
     return smoothingValue / normalizationConstant;
@@ -71,6 +95,10 @@ constexpr inline float Spiky2SmoothingKernal2D( float radius, float distance ) n
 
 constexpr inline float Spiky2SmoothinKernalDerivative2D( float radius, float distance ) noexcept
 {
+    if ( distance > radius )
+    {
+        return 0;
+    }
     float smoothingValue        = 2 * distance - 2 * radius;
     float normalizationConstant = ( PI * radius * radius * radius * radius ) / 6;
     return smoothingValue / normalizationConstant;
@@ -78,6 +106,10 @@ constexpr inline float Spiky2SmoothinKernalDerivative2D( float radius, float dis
 
 constexpr inline float Spiky2SmoothingKernalLaplace2D( float radius, float distance ) noexcept
 {
+    if ( distance > radius )
+    {
+        return 0;
+    }
     float smoothingValue        = 2;
     float normalizationConstant = ( PI * radius * radius * radius * radius ) / 6;
     return smoothingValue / normalizationConstant;
@@ -87,6 +119,10 @@ constexpr inline float Spiky2SmoothingKernalLaplace2D( float radius, float dista
 
 constexpr inline float Spiky3Kernal2D( float radius, float distance ) noexcept
 {
+    if ( distance > radius )
+    {
+        return 0;
+    }
     float smoothingValue        = ( radius - distance ) * ( radius - distance ) * ( radius - distance );
     float normalizationConstant = ( PI * radius * radius * radius * radius * radius ) / 10.0f;
     return smoothingValue / normalizationConstant;
@@ -94,6 +130,10 @@ constexpr inline float Spiky3Kernal2D( float radius, float distance ) noexcept
 
 constexpr inline float Spiky3KernalDerivative2D( float radius, float distance ) noexcept
 {
+    if ( distance > radius )
+    {
+        return 0;
+    }
     float smoothingValue        = -3.0f * ( radius - distance ) * ( radius - distance );
     float normalizationConstant = ( PI * radius * radius * radius * radius * radius ) / 10.0f;
     return smoothingValue / normalizationConstant;
@@ -101,6 +141,10 @@ constexpr inline float Spiky3KernalDerivative2D( float radius, float distance ) 
 
 constexpr inline float Spiky3KernalLaplacian2D( float radius, float distance ) noexcept
 {
+    if ( distance > radius )
+    {
+        return 0;
+    }
     float smoothingValue        = 6.0f * ( radius - distance );
     float normalizationConstant = ( PI * radius * radius * radius * radius * radius ) / 10.0f;
     return smoothingValue / normalizationConstant;

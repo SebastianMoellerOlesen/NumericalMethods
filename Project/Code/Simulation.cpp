@@ -60,6 +60,8 @@ Simulation::Simulation( uint32_t size )
 
     m_DebugSettings.DebugTexture = LoadTextureFromImage( debugImg );
     SetTextureFilter( m_DebugSettings.DebugTexture, TEXTURE_FILTER_BILINEAR );
+
+    InitAirfoil();
 }
 
 Simulation::~Simulation()
@@ -277,13 +279,25 @@ void Simulation::Run() noexcept
         float slowdown = m_PhysicsSettings.SlowMultiplier < 1e-3f ? 1.0f : m_PhysicsSettings.SlowMultiplier;
 
         m_PhysicsSettings.RestTime += m_PhysicsSettings.FrameTime / slowdown;
-        float timestep              = m_PhysicsSettings.SmoothingRadius / std::sqrt( m_PhysicsSettings.PressureMultiplier ) / m_PhysicsSettings.InvTimestepMultiplier;
-        timestep                    = timestep > m_PhysicsSettings.FrameTime ? m_PhysicsSettings.FrameTime : timestep;
+
+        // We generate the worst case, for the first step...
+        float timestep = m_PhysicsSettings.SmoothingRadius / std::sqrt( m_PhysicsSettings.PressureMultiplier ) / m_PhysicsSettings.InvTimestepMultiplier;
 
         //-------------------------------------------------------------------------
 
         while ( m_PhysicsSettings.RestTime >= timestep )
         {
+            // Calculate timestep adaptive, based on the largest velocity.
+            float maxSpeed = Vector2Length( *std::max_element( std::execution::par_unseq, m_Velocities.begin(), m_Velocities.end(), []( const Vector2& vel, const Vector2& other ) {
+                return Vector2Length( vel ) < Vector2Length( other );
+            } ) );
+
+            // timestep = m_PhysicsSettings.SmoothingRadius / maxSpeed / m_PhysicsSettings.InvTimestepMultiplier;
+            // timestep = timestep < m_PhysicsSettings.FrameTime ? timestep : m_PhysicsSettings.FrameTime;
+            // std::cout << timestep << "\n";
+
+            // TODO: INVESTIGATE THE PERFORMANCE; AND WHETHER OR NOT IT IS WORK DOING... FOR SOME SUTIATIONS IT MIGHT...
+
             Update( timestep );
             m_PhysicsSettings.RestTime -= timestep;
         }
@@ -307,9 +321,9 @@ void Simulation::InitSandbox( /* Change this to take a bool, on whether or not t
 
     m_Masses                                = 1.0f;
     m_PhysicsSettings.Paused                = true;
-    m_PhysicsSettings.ParticleCount         = 2000;
+    m_PhysicsSettings.ParticleCount         = 1000;
     m_PhysicsSettings.SmoothingRadius       = 0.35;
-    m_PhysicsSettings.InvTimestepMultiplier = 2.0f;
+    m_PhysicsSettings.InvTimestepMultiplier = 4.0f;
     m_PhysicsSettings.GravityMultiplier     = 5.0f;
     m_PhysicsSettings.TargetDensity         = 15.0f;
     m_PhysicsSettings.PressureMultiplier    = 100.0f;
@@ -575,21 +589,7 @@ void Simulation::ExplicitUpdate( float timestep ) noexcept
 
     //-------------------------------------------------------------------------
 
-    // TESTING... Should mabey be changed...
-    if ( ( IsMouseButtonDown( MOUSE_LEFT_BUTTON ) || IsMouseButtonDown( MOUSE_RIGHT_BUTTON ) ) && m_PhysicsSettings.ApplyMouseForce )
-    {
-        float   multiplier = IsMouseButtonDown( MOUSE_LEFT_BUTTON ) ? 1.0f : -1.0f;
-        Vector2 worldPos   = GetMousePosition() / m_DebugSettings.RenderResolution * m_PhysicsSettings.SimulationResolution;
-
-        for ( uint32_t i = 0; i < m_Positions.size(); i++ )
-        {
-            Vector2 difference = worldPos - m_Positions[i];
-            float   distance   = Vector2Length( difference );
-            float   weight     = CurrentSmoothingKernal2D( 2.0f, distance );
-
-            m_Velocities[i] += difference / distance * weight * multiplier * m_PhysicsSettings.PressureMultiplier / m_Densities[i];
-        }
-    }
+    ApplyMouseAction();
 
     //-------------------------------------------------------------------------
 
@@ -609,51 +609,76 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
 
     //-------------------------------------------------------------------------
 
-    if ( ( IsMouseButtonDown( MOUSE_LEFT_BUTTON ) || IsMouseButtonDown( MOUSE_RIGHT_BUTTON ) ) && m_PhysicsSettings.ApplyMouseForce )
-    {
-        float   multiplier = IsMouseButtonDown( MOUSE_LEFT_BUTTON ) ? 1.0f : -1.0f;
-        Vector2 worldPos   = GetMousePosition() / m_DebugSettings.RenderResolution * m_PhysicsSettings.SimulationResolution;
-
-        for ( uint32_t i = 0; i < m_Positions.size(); i++ )
-        {
-            Vector2 difference = worldPos - m_Positions[i];
-            float   distance   = Vector2Length( difference );
-            float   weight     = CurrentSmoothingKernal2D( 2.0f, distance );
-
-            m_Velocities[i] += difference / distance * weight * multiplier * m_PhysicsSettings.PressureMultiplier / m_Densities[i];
-        }
-    }
+    ApplyMouseAction();
 
     //-------------------------------------------------------------------------
 
     if ( m_PhysicsSettings.ApplyPressureForce )
     {
+
+        //-------------------------------------------------------------------------
+
         // We iterate, to approximate the implicit update.
         std::vector<Vector2> originalPos = m_Positions;
         std::vector<Vector2> lastIterPos = m_Positions;
         std::vector<Vector2> originalVel = m_Velocities;
 
-        std::vector<float> deltas;
+        //-------------------------------------------------------------------------
+
+        // Change to track acc for convergence.
+        std::vector<Vector2> lastAcc;
+        std::vector<Vector2> currAcc;
+        std::vector<Vector2> deltaAcc;
+
+        // Set all elements to 0.
+        // Resize should have done the same, but not 100% sure.
+        lastAcc.assign( m_PhysicsSettings.ParticleCount, Vector2Zero() );
+        currAcc.assign( m_PhysicsSettings.ParticleCount, Vector2Zero() );
+        deltaAcc.resize( m_PhysicsSettings.ParticleCount );
+
+        std::vector<float> deltas; // The scale between the delta, and the last acceleration.
         deltas.resize( m_PhysicsSettings.ParticleCount );
+
+        //-------------------------------------------------------------------------
 
         uint32_t iteration      = 0;
         uint32_t maxIter        = m_PhysicsSettings.ImplicitMaxIterations; // Todo: Make this variable in ImGui!!!
-        float    errorThreshold = 0.01f;
+        float    errorThreshold = 1e-2f;                                   // The change needs to be {} of the last acceleration. (This should be varied)
 
-        // Helps with the first guess, and gives better convergence.
+        //-------------------------------------------------------------------------
+
+        // We take a guess at what the next position will be. This help with convergence and stability.
+        // If not, we will just blow up.
         for ( uint32_t i = 0; i < m_Positions.size(); i++ )
         {
             m_Positions[i] = originalPos[i] + originalVel[i] * timestep;
         }
+
+        //-------------------------------------------------------------------------
 
         while ( iteration < maxIter )
         {
 
             //-------------------------------------------------------------------------
 
-            m_Velocities = originalVel;
-            lastIterPos  = m_Positions;
             iteration++;
+
+            //-------------------------------------------------------------------------
+
+            // We update current during the loop.
+            // When we swap here, we place the last current, into the current last/prev.
+            // This is more effecient than reallocating, as here we are just swapping pointers.
+            std::swap( lastAcc, currAcc );
+
+            // Also reset the curr Acc to 0.
+            currAcc.assign( m_PhysicsSettings.ParticleCount, Vector2Zero() );
+
+            // Update the last iter position.
+            // We could mabey also do something to swap here.
+            lastIterPos = m_Positions;
+
+            // Should be removed in a bit...
+            m_Velocities = originalVel;
 
             // Update using the positions from the last iteration.
             UpdateGridIndices();
@@ -669,7 +694,7 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
             {
                 for ( uint32_t i = 0; i < m_Positions.size(); i++ )
                 {
-                    m_Velocities[i] += Vector2( 0.0f, 1.0f ) * m_PhysicsSettings.GravityMultiplier * timestep;
+                    currAcc[i] += Vector2( 0.0f, 1.0f ) * m_PhysicsSettings.GravityMultiplier;
                 }
             }
 
@@ -677,7 +702,7 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
             {
                 for ( uint32_t i = 0; i < m_Positions.size(); i++ )
                 {
-                    m_Velocities[i] += m_ViscocityForces[i] * timestep / m_Densities[i];
+                    currAcc[i] += m_ViscocityForces[i] / m_Densities[i];
                 }
             }
 
@@ -686,36 +711,39 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
             // We do an update, with something along the likes of newtons method. It not quite that, but close.
             for ( uint32_t i = 0; i < m_Positions.size(); i++ )
             {
-                // We calculate the position for the next iteration.
-                // m_Positions[i] = originalPos[i] + originalVel[i] * timestep + m_PressureGradiants[i] * timestep * timestep / m_Densities[i];
-                m_Positions[i] = originalPos[i] + m_Velocities[i] * timestep + m_PressureGradiants[i] * timestep * timestep / m_Densities[i];
+                currAcc[i]     += m_PressureGradiants[i] / m_Densities[i];
+                m_Positions[i]  = originalPos[i] + originalVel[i] * timestep + currAcc[i] * timestep * timestep;
             }
 
             //-------------------------------------------------------------------------
 
-            // Caclculate the deltas
-            std::for_each( std::execution::par_unseq, m_SortedParticles.begin(), m_SortedParticles.end(), [&deltas, &lastIterPos, this]( const int32_t i ) {
-                deltas[i] = Vector2Distance( m_Positions[i], lastIterPos[i] );
+            std::for_each( std::execution::par_unseq, m_SortedParticles.begin(), m_SortedParticles.end(), [&deltaAcc, &currAcc, &lastAcc]( const int32_t i ) {
+                deltaAcc[i] = currAcc[i] - lastAcc[i];
             } );
 
-            // Find the largest one.
+            std::for_each( std::execution::par_unseq, m_SortedParticles.begin(), m_SortedParticles.end(), [&deltas, &deltaAcc, &lastAcc]( const int32_t i ) {
+                deltas[i] = Vector2Length( deltaAcc[i] ) / Vector2Length( lastAcc[i] );
+            } );
+
             float largestDelta = *std::max_element( std::execution::par_unseq, deltas.begin(), deltas.end() );
             if ( largestDelta < errorThreshold ) { break; }
-
-            // Increment the interation to avoid inf loop, in case on non-convergence.
         }
-
-        // In general, if
 
         // Update the velocity:
         for ( uint32_t i = 0; i < m_Positions.size(); i++ )
         {
+            // We already updated the position, but we also need to update the velocity.
             m_Velocities[i] = ( m_Positions[i] - originalPos[i] ) / timestep;
         }
 
         HandleBoundary();
     }
 
+    //-------------------------------------------------------------------------
+
+    // If we dont apply the pressure force, we still need to apply the others.
+    // Note we do cheat a bit, as this is explicit.
+    // But they are not as important as the pressureforce, so it won't be to important.
     else
     {
         //-------------------------------------------------------------------------
@@ -805,20 +833,8 @@ void Simulation::LeapfrogUpdate( float timestep ) noexcept
 
     //-------------------------------------------------------------------------
 
-    if ( ( IsMouseButtonDown( MOUSE_LEFT_BUTTON ) || IsMouseButtonDown( MOUSE_RIGHT_BUTTON ) ) && m_PhysicsSettings.ApplyMouseForce )
-    {
-        float   multiplier = IsMouseButtonDown( MOUSE_LEFT_BUTTON ) ? 1.0f : -1.0f;
-        Vector2 worldPos   = GetMousePosition() / m_DebugSettings.RenderResolution * m_PhysicsSettings.SimulationResolution;
+    ApplyMouseAction();
 
-        for ( uint32_t i = 0; i < m_Positions.size(); i++ )
-        {
-            Vector2 difference = worldPos - m_Positions[i];
-            float   distance   = Vector2Length( difference );
-            float   weight     = CurrentSmoothingKernal2D( 2.0f, distance );
-
-            m_Velocities[i] += difference / distance * weight * multiplier * m_PhysicsSettings.PressureMultiplier / m_Densities[i];
-        }
-    }
     //-------------------------------------------------------------------------
 
     // We can now use the new velocity v^(n+1) to update the position again.
@@ -1486,6 +1502,22 @@ void Simulation::DrawAirfoilOverlay() noexcept
         ImGui::SliderFloat( " AirSpeed ", &m_AFSpawningSpeed, 0.0f, 100.0f );
     }
     ImGui::End();
+}
+
+void Simulation::ApplyMouseAction() noexcept
+{
+    if ( ( IsMouseButtonDown( MOUSE_LEFT_BUTTON ) || IsMouseButtonDown( MOUSE_RIGHT_BUTTON ) ) && m_PhysicsSettings.ApplyMouseForce )
+    {
+        float   multiplier = IsMouseButtonDown( MOUSE_LEFT_BUTTON ) ? 1.0f : -1.0f;
+        Vector2 worldPos   = GetMousePosition() / m_DebugSettings.RenderResolution * m_PhysicsSettings.SimulationResolution;
+        for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+        {
+            Vector2 difference  = worldPos - m_Positions[i];
+            float   distance    = Vector2Length( difference );
+            float   weight      = Poly6Kernal2D( 2.0f, distance );
+            m_Velocities[i]    += difference * weight * multiplier * std::sqrt( m_PhysicsSettings.PressureMultiplier ) / m_Densities[i] * 8;
+        }
+    }
 }
 
 //-------------------------------------------------------------------------

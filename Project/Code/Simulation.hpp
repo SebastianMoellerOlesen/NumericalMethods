@@ -81,7 +81,7 @@ struct PhysicsSettings
     //-------------------------------------------------------------------------
 
     const float  SimulationResolution{ 10.0f }; // X and Y are same scale...
-    uint32_t     ParticleCount{ 2000 };
+    uint32_t     ParticleCount{ 0 };
     UpdateScheme Scheme{ UpdateScheme::Leapfrog };
     int32_t      ImplicitMaxIterations{ 20 }; // ImGui doesn't take uint
 
@@ -210,6 +210,8 @@ private:
 
     Vector2 CalculateViscocityForce( Vector2 location ) noexcept;
     Vector2 CalculateViscocityForce( uint32_t index ) noexcept;
+
+    void ApplyMouseAction() noexcept;
 
     //-------------------------------------------------------------------------
 
