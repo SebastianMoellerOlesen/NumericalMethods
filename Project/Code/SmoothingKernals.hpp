@@ -1,16 +1,42 @@
 #pragma once
 
 #include "raylib.h"
+#include <cmath>
 
 enum class Kernal
 {
+    Poly6, // Should be good for density...
     Spiky1,
     Spiky2,
     Spiky3,
-
 };
 
+// Todo, Change this to a param, so i can change it for the different updates...
 static inline Kernal currentKernal = Kernal::Spiky2;
+
+//-------------------------------------------------------------------------
+
+constexpr inline float Poly6Kernal2D( float radius, float distance ) noexcept
+{
+    // (r^2 - d ^2)^3
+    float smoothingValue        = ( radius * radius - distance * distance ) * ( radius * radius - distance * distance ) * ( radius * radius - distance * distance );
+    float normalizationConstant = ( PI * std::pow( radius, 8 ) ) / 4.0f;
+    return smoothingValue / normalizationConstant;
+}
+
+constexpr inline float Poly6KernalDerivative2D( float radius, float distance ) noexcept
+{
+    float smoothingValue        = ( -2 * distance * ( radius * radius - distance * distance ) * ( radius * radius - distance * distance ) );
+    float normalizationConstant = ( PI * std::pow( radius, 8 ) ) / 4.0f;
+    return smoothingValue / normalizationConstant;
+}
+
+constexpr inline float Poly6KernalLaplacian2D( float radius, float distance ) noexcept
+{
+    float smoothingValue        = ( -2 * ( radius * radius - distance * distance ) * ( radius * radius - distance * distance ) ) + 4 * radius * radius * ( radius * radius - distance * distance );
+    float normalizationConstant = ( PI * std::pow( radius, 8 ) ) / 4.0f;
+    return smoothingValue / normalizationConstant;
+}
 
 //-------------------------------------------------------------------------
 
@@ -91,6 +117,8 @@ constexpr inline float CurrentSmoothingKernal2D( float radius, float distance ) 
 
     switch ( currentKernal )
     {
+        case Kernal::Poly6:
+            return Poly6Kernal2D( radius, distance );
         case Kernal::Spiky1:
             return SpikyKernal2D( radius, distance );
         case Kernal::Spiky2:
@@ -110,6 +138,8 @@ constexpr inline float CurrentSmoothingKernalDerivative2D( float radius, float d
 
     switch ( currentKernal )
     {
+        case Kernal::Poly6:
+            return Poly6KernalDerivative2D( radius, distance );
         case Kernal::Spiky1:
             return SpikyKernalDerivative2D( radius, distance );
         case Kernal::Spiky2:
@@ -129,6 +159,8 @@ constexpr inline float CurrentSmoothingKernalLaplacian2D( float radius, float di
 
     switch ( currentKernal )
     {
+        case Kernal::Poly6:
+            return Poly6KernalLaplacian2D( radius, distance );
         case Kernal::Spiky1:
             return SpikyKernalLaplacian2D( radius, distance );
         case Kernal::Spiky2:

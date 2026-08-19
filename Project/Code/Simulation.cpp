@@ -342,9 +342,9 @@ void Simulation::InitSandbox( /* Change this to take a bool, on whether or not t
     for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
     {
         // Position
-        float x        = GetRandomValue( 0.0f, m_DebugSettings.RenderResolution );
-        float y        = GetRandomValue( 0.0f, m_DebugSettings.RenderResolution );
-        m_Positions[i] = Vector2( x, y ) / m_DebugSettings.RenderResolution * m_PhysicsSettings.SimulationResolution;
+        float x        = RandomFloat( 0.0f, m_PhysicsSettings.SimulationResolution );
+        float y        = RandomFloat( 0.0f, m_PhysicsSettings.SimulationResolution );
+        m_Positions[i] = Vector2( x, y );
 
         //-------------------------------------------------------------------------
 
@@ -358,6 +358,7 @@ void Simulation::InitSandbox( /* Change this to take a bool, on whether or not t
 
     //-------------------------------------------------------------------------
 
+    m_GridIndices.resize( m_PhysicsSettings.ParticleCount );
     UpdateGridIndices();
 
     //-------------------------------------------------------------------------
@@ -1215,6 +1216,8 @@ void Simulation::DrawPhysicsOverlay() noexcept
     if ( ImGui::Button( " Implicit " ) ) { m_PhysicsSettings.Scheme = UpdateScheme::Implicit; }
 
     ImGui::Text( "Kernal" );
+    if ( ImGui::Button( "Poly_6" ) ) { currentKernal = Kernal::Poly6; }
+    ImGui::SameLine();
     if ( ImGui::Button( "Spiky_1" ) ) { currentKernal = Kernal::Spiky1; }
     ImGui::SameLine();
     if ( ImGui::Button( "Spiky_2" ) ) { currentKernal = Kernal::Spiky2; }
