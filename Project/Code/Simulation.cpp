@@ -28,7 +28,10 @@ Simulation::Simulation( uint32_t size )
 
     //-------------------------------------------------------------------------
 
+    // High DPI i mabey a problem on windows.
+#ifndef PLATFORM_WINDOWS
     SetConfigFlags( FLAG_WINDOW_HIGHDPI );
+#endif
     InitWindow( size, size, "Simulation" );
     SetTargetFPS( m_PhysicsSettings.TargetFPS ); // Debatable if it should be in the physics settings...
 
@@ -1631,7 +1634,7 @@ void Simulation::DrawDensity() noexcept
 
                        // Map the density to the color.
                        float t = ( density - this->m_DebugSettings.DebugFieldMiddle ) / ( this->m_DebugSettings.DebugFieldMax - this->m_DebugSettings.DebugFieldMiddle );
-                       pixel   = ColorLerp( this->m_DebugSettings.DebugMiddleColor, this->m_DebugSettings.DebugMaxColor, t );
+                       pixel   = ColorLerp( WHITE, BLUE, t );
 
                        //-------------------------------------------------------------------------
                    } );
