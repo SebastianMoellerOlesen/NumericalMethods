@@ -8,6 +8,12 @@
 
 inline Vector2 GetMousePosScaled()
 {
+#ifdef PLATFORM_WINDOWS
+    // For windows, there is not problem with the mouse.
+    // A quirk for my setup...
+    // This might also be true for other linux distros, or X11 systems...
+    return GetMousePosition();
+#endif
     return GetMousePosition() * GetWindowScaleDPI();
 }
 

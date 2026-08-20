@@ -53,7 +53,7 @@
       "toolchainFile": "${sourceDir}/Toolchain-mingw.cmake",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "OFF",
+        "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
         "CMAKE_EXE_LINKER_FLAGS": "-static"
       }
     }

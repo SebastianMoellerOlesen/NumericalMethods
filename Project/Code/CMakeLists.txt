@@ -17,6 +17,11 @@ target_sources(Project PUBLIC
   ${HEADERS}
 )
 
+
+if(WIN32)
+  target_compile_definitions(Project PRIVATE PLATFORM_WINDOWS)
+endif()
+
 target_include_directories(Project PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 if (WIN32)
