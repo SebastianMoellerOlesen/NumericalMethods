@@ -336,9 +336,7 @@ void Simulation::InitSandbox( /* Change this to take a bool, on whether or not t
     m_DebugSettings.Draw               = true;
     m_DebugSettings.ParticleDrawRadius = 5.0f;
 
-    m_DebugSettings.Field            = DebugField::Density;
-    m_DebugSettings.DebugFieldMiddle = 10.0f;
-    m_DebugSettings.DebugFieldMax    = 30.0f;
+    m_DebugSettings.Field = DebugField::None;
 
     //-------------------------------------------------------------------------
 
