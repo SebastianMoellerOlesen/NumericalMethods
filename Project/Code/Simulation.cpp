@@ -1,4 +1,5 @@
 #include "Simulation.hpp"
+#include "Geometries.hpp"
 #include "SmoothingKernals.hpp"
 #include "Utils.hpp"
 
@@ -61,7 +62,7 @@ Simulation::Simulation( uint32_t size )
     m_DebugSettings.DebugTexture = LoadTextureFromImage( debugImg );
     SetTextureFilter( m_DebugSettings.DebugTexture, TEXTURE_FILTER_BILINEAR );
 
-    InitAirfoil();
+    InitObstacle();
 }
 
 Simulation::~Simulation()
@@ -310,10 +311,10 @@ void Simulation::InitSandbox( /* Change this to take a bool, on whether or not t
 {
     //-------------------------------------------------------------------------
 
-    m_PhysicsSettings.ApplyPressureForce = false;
+    m_PhysicsSettings.ApplyPressureForce = true;
     m_PhysicsSettings.ApplyViscocity     = false;
-    m_PhysicsSettings.ApplyGravity       = false;
-    m_PhysicsSettings.ApplyMouseForce    = false;
+    m_PhysicsSettings.ApplyGravity       = true;
+    m_PhysicsSettings.ApplyMouseForce    = true;
 
     m_PhysicsSettings.SlowMultiplier = 1.0f;
 
@@ -324,10 +325,10 @@ void Simulation::InitSandbox( /* Change this to take a bool, on whether or not t
     m_PhysicsSettings.ParticleCount         = 1000;
     m_PhysicsSettings.SmoothingRadius       = 0.35;
     m_PhysicsSettings.InvTimestepMultiplier = 4.0f;
-    m_PhysicsSettings.GravityMultiplier     = 5.0f;
-    m_PhysicsSettings.TargetDensity         = 15.0f;
-    m_PhysicsSettings.PressureMultiplier    = 100.0f;
-    m_PhysicsSettings.Viscocity             = 0.01f;
+    m_PhysicsSettings.GravityMultiplier     = 9.0f;
+    m_PhysicsSettings.TargetDensity         = 40.0f;
+    m_PhysicsSettings.PressureMultiplier    = 1000.0f;
+    m_PhysicsSettings.Viscocity             = 0.1f;
     m_PhysicsSettings.Scheme                = UpdateScheme::Implicit;
 
     //-------------------------------------------------------------------------
@@ -342,6 +343,7 @@ void Simulation::InitSandbox( /* Change this to take a bool, on whether or not t
     //-------------------------------------------------------------------------
 
     m_AFEnabled = false;
+    m_Obstacles = false;
 
     //-------------------------------------------------------------------------
 
@@ -414,7 +416,7 @@ void Simulation::InitAirfoil( /* Change this to take a bool, on whether or not t
     m_PhysicsSettings.ApplyMouseForce    = false;
 
     m_PhysicsSettings.SlowMultiplier = 15.0f;
-    currentKernal                    = Kernal::Spiky3;
+    currentKernal                    = Kernal::Spiky2;
 
     //-------------------------------------------------------------------------
 
@@ -445,6 +447,10 @@ void Simulation::InitAirfoil( /* Change this to take a bool, on whether or not t
     m_AFRotation = 4.7f;
     m_AFOffset   = { 0.0f, 4.4f };
     UpdateAirfoil();
+
+    //-------------------------------------------------------------------------
+
+    m_Obstacles = false;
 
     //-------------------------------------------------------------------------
 
@@ -503,6 +509,111 @@ void Simulation::InitAirfoil( /* Change this to take a bool, on whether or not t
     m_BorderP2.resize( 0 );
     m_BorderP1.insert( m_BorderP1.begin(), { { 0, 0 }, { m_PhysicsSettings.SimulationResolution, m_PhysicsSettings.SimulationResolution }, { -3, m_PhysicsSettings.SimulationResolution } } );
     m_BorderP2.insert( m_BorderP2.begin(), { { m_PhysicsSettings.SimulationResolution, 0 }, { 0, m_PhysicsSettings.SimulationResolution }, { -3, 0 } } );
+
+    //-------------------------------------------------------------------------
+}
+
+void Simulation::InitObstacle() noexcept
+{
+    //-------------------------------------------------------------------------
+
+    m_PhysicsSettings.ApplyPressureForce = true;
+    m_PhysicsSettings.ApplyViscocity     = true;
+    m_PhysicsSettings.ApplyGravity       = true;
+    m_PhysicsSettings.ApplyMouseForce    = false;
+
+    m_PhysicsSettings.SlowMultiplier = 3.0f;
+    currentKernal                    = Kernal::Spiky2;
+
+    //-------------------------------------------------------------------------
+
+    m_Masses                                = 1.0f;
+    m_PhysicsSettings.Paused                = true;
+    m_PhysicsSettings.ParticleCount         = 1000;
+    m_PhysicsSettings.SmoothingRadius       = 0.35f;
+    m_PhysicsSettings.InvTimestepMultiplier = 4.0f; // Large here to avoid them phasing through the airfoil...
+    m_PhysicsSettings.GravityMultiplier     = 10.0f;
+    m_PhysicsSettings.TargetDensity         = 40.0f;
+    m_PhysicsSettings.PressureMultiplier    = 1000.0f;
+    m_PhysicsSettings.Viscocity             = 100.0f;
+    m_PhysicsSettings.Scheme                = UpdateScheme::Implicit;
+
+    //-------------------------------------------------------------------------
+
+    m_DebugSettings.Draw               = true;
+    m_DebugSettings.ParticleDrawRadius = 4.0f;
+
+    m_DebugSettings.Field = DebugField::None;
+
+    //-------------------------------------------------------------------------
+
+    m_AFEnabled = false;
+
+    //-------------------------------------------------------------------------
+
+    // Note:
+    // Copy this to the other Inits...
+    m_Obstacles = true;
+
+    m_ObstaclesP1 = ObstacleP1;
+    m_ObstaclesP2 = ObstacleP2;
+
+    //-------------------------------------------------------------------------
+
+    uint32_t particleCount = m_PhysicsSettings.ParticleCount;
+    m_Positions.resize( particleCount );
+    m_Velocities.resize( particleCount );
+    m_ParticleColors.assign( particleCount, BLUE );
+
+    //-------------------------------------------------------------------------
+
+    // For the sandbox, we initialilze the particles randomly, without velocity.
+    for ( uint32_t i = 0; i < m_PhysicsSettings.ParticleCount; i++ )
+    {
+        // Position
+        float x        = RandomFloat( -1.0f, m_PhysicsSettings.SimulationResolution + 5.0f );
+        float y        = RandomFloat( 0.0f, m_PhysicsSettings.SimulationResolution );
+        m_Positions[i] = Vector2( x, y );
+
+        //-------------------------------------------------------------------------
+
+        float dx = 0.0f;
+        float dy = 0.0f;
+
+        m_Velocities[i] = Vector2( dx, dy );
+
+        //-------------------------------------------------------------------------
+    }
+
+    //-------------------------------------------------------------------------
+
+    m_GridIndices.resize( m_PhysicsSettings.ParticleCount );
+    UpdateGridIndices();
+
+    //-------------------------------------------------------------------------
+
+    // Initialize the fields.
+    m_Densities.resize( m_PhysicsSettings.ParticleCount );
+    UpdateDensities();
+
+    m_Pressures.resize( m_PhysicsSettings.ParticleCount );
+    UpdatePressures();
+
+    m_PressureGradiants.resize( m_PhysicsSettings.ParticleCount );
+    UpdatePressureGradiant();
+
+    m_ViscocityForces.resize( m_PhysicsSettings.ParticleCount );
+    UpdateViscocity();
+
+    // Avoid the density only being drawn, when we unpause...
+    DrawDensity();
+
+    //-------------------------------------------------------------------------
+
+    m_BorderP1.resize( 0 );
+    m_BorderP2.resize( 0 );
+    m_BorderP1.insert( m_BorderP1.begin(), { { 0, 0 }, { m_PhysicsSettings.SimulationResolution, 0 }, { 0, m_PhysicsSettings.SimulationResolution } } );
+    m_BorderP2.insert( m_BorderP2.begin(), { { m_PhysicsSettings.SimulationResolution, 0 }, { m_PhysicsSettings.SimulationResolution, m_PhysicsSettings.SimulationResolution }, { 0, 0 } } );
 
     //-------------------------------------------------------------------------
 }
@@ -589,7 +700,7 @@ void Simulation::ExplicitUpdate( float timestep ) noexcept
 
     //-------------------------------------------------------------------------
 
-    ApplyMouseAction();
+    ApplyMouseAction( timestep );
 
     //-------------------------------------------------------------------------
 
@@ -609,7 +720,7 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
 
     //-------------------------------------------------------------------------
 
-    ApplyMouseAction();
+    ApplyMouseAction( timestep );
 
     //-------------------------------------------------------------------------
 
@@ -643,7 +754,7 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
 
         uint32_t iteration      = 0;
         uint32_t maxIter        = m_PhysicsSettings.ImplicitMaxIterations; // Todo: Make this variable in ImGui!!!
-        float    errorThreshold = 1e-2f;                                   // The change needs to be {} of the last acceleration. (This should be varied)
+        float    errorThreshold = 1.0f / 20.0f;                            // The change needs to be {} of the last acceleration. (This should be varied)
 
         //-------------------------------------------------------------------------
 
@@ -833,7 +944,7 @@ void Simulation::LeapfrogUpdate( float timestep ) noexcept
 
     //-------------------------------------------------------------------------
 
-    ApplyMouseAction();
+    ApplyMouseAction( timestep );
 
     //-------------------------------------------------------------------------
 
@@ -932,6 +1043,40 @@ void Simulation::HandleBoundary() noexcept
     {
         AirfoilParticleTeleport();
     }
+
+    if ( m_Obstacles )
+    {
+        for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+        {
+
+            auto& pos = m_Positions[i];
+            auto& vel = m_Velocities[i];
+
+            for ( uint32_t k = 0; k < m_ObstaclesP1.size(); k++ )
+            {
+                auto P1 = m_ObstaclesP1[k];
+                auto P2 = m_ObstaclesP2[k];
+
+                // Just made this up, if it works, it sticks...
+                auto particleRadius = m_PhysicsSettings.SmoothingRadius / 2.0f;
+
+                if ( !CheckCollisionCircleLine( m_Positions[i], particleRadius, P1, P2 ) ) { continue; }
+                Vector2 normal    = Vector2Normalize( Vector2Rotate( P2 - P1, PI / 2 ) );
+                float   offset    = Vector2DotProduct( normal, P1 - m_Positions[i] );
+                float   direction = offset < 0 ? 1.0 : -1.0;
+
+                // Push it out...
+                pos += normal * offset + normal * particleRadius * direction;
+                vel -= normal * Vector2DotProduct( vel, normal );
+            }
+
+            if ( pos.y > m_PhysicsSettings.SimulationResolution )
+            {
+                pos = Vector2{ 0.5f, 0.5f } * GetRandomDir() / 2.0f;
+                vel = GetRandomDir();
+            }
+        }
+    }
 }
 
 //-------------------------------------------------------------------------
@@ -993,13 +1138,15 @@ void Simulation::UpdateDensities() noexcept
 float Simulation::CalculatePressure( Vector2 location ) noexcept
 {
     float difference = CalculateDensity( location ) - m_PhysicsSettings.TargetDensity;
-    return difference * m_PhysicsSettings.PressureMultiplier;
+    float pressure   = difference * m_PhysicsSettings.PressureMultiplier;
+    return pressure;
 }
 
 float Simulation::CalculatePressure( uint32_t index ) noexcept
 {
     float difference = m_Densities[index] - m_PhysicsSettings.TargetDensity;
-    return difference * m_PhysicsSettings.PressureMultiplier;
+    float pressure   = difference * m_PhysicsSettings.PressureMultiplier;
+    return pressure;
 }
 
 //-------------------------------------------------------------------------
@@ -1255,6 +1402,11 @@ void Simulation::Render() noexcept
         for ( uint32_t i = 0; i < m_TransformedAirfoilP1.size(); i++ ) { DrawLineEx( WorldSpaceToScreenSpace( m_TransformedAirfoilP1[i] ), WorldSpaceToScreenSpace( m_TransformedAirfoilP2[i] ), 3.0f, BLACK ); }
     }
 
+    if ( m_Obstacles )
+    {
+        for ( uint32_t i = 0; i < m_ObstaclesP1.size(); i++ ) { DrawLineEx( WorldSpaceToScreenSpace( m_ObstaclesP1[i] ), WorldSpaceToScreenSpace( m_ObstaclesP2[i] ), 8.0f, BLACK ); }
+    }
+
     if ( m_DebugSettings.Draw )
     {
         for ( uint32_t i = 0; i < m_BorderP1.size(); i++ )
@@ -1392,6 +1544,8 @@ void Simulation::DrawPhysicsOverlay() noexcept
     if ( ImGui::Button( "StartSandbox" ) ) { InitSandbox(); }
     ImGui::SameLine();
     if ( ImGui::Button( "StartAirfoil" ) ) { InitAirfoil(); }
+    ImGui::SameLine();
+    if ( ImGui::Button( "Start Obstacle" ) ) { InitObstacle(); }
     ImGui::SliderFloat( " InvTimestepMultiplier ", &m_PhysicsSettings.InvTimestepMultiplier, 1.0f, 10.0f );
 
     //-------------------------------------------------------------------------
@@ -1504,7 +1658,7 @@ void Simulation::DrawAirfoilOverlay() noexcept
     ImGui::End();
 }
 
-void Simulation::ApplyMouseAction() noexcept
+void Simulation::ApplyMouseAction( float timestep ) noexcept
 {
     if ( ( IsMouseButtonDown( MOUSE_LEFT_BUTTON ) || IsMouseButtonDown( MOUSE_RIGHT_BUTTON ) ) && m_PhysicsSettings.ApplyMouseForce )
     {
@@ -1515,7 +1669,7 @@ void Simulation::ApplyMouseAction() noexcept
             Vector2 difference  = worldPos - m_Positions[i];
             float   distance    = Vector2Length( difference );
             float   weight      = Poly6Kernal2D( 2.0f, distance );
-            m_Velocities[i]    += difference * weight * multiplier * std::sqrt( m_PhysicsSettings.PressureMultiplier ) / m_Densities[i] * 8;
+            m_Velocities[i]    += difference * weight * multiplier * m_PhysicsSettings.PressureMultiplier * timestep / m_Densities[i] * 8;
         }
     }
 }

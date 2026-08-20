@@ -8,6 +8,7 @@ set(SOURCES
 set(HEADERS
   Simulation.hpp
   SmoothingKernals.hpp
+  Geometries.hpp
   Utils.hpp
 )
 

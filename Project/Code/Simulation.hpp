@@ -8,52 +8,6 @@
 #include <utility>
 #include <vector>
 
-static inline std::vector<Vector2> AirfoilP1{
-    { -0.500f, 0.000f },
-    { -0.476f, 0.026f },
-    { -0.405f, 0.046f },
-    { -0.294f, 0.058f },
-    { -0.155f, 0.060f },
-    { 0.000f, 0.053f },
-    { 0.155f, 0.041f },
-    { 0.294f, 0.027f },
-    { 0.405f, 0.014f },
-    { 0.476f, 0.005f },
-    { 0.500f, -0.001f }, // This is 0.001 for a small fix. If it's not there, there are some issues for the particles.
-    { 0.476f, -0.005f },
-    { 0.405f, -0.014f },
-    { 0.294f, -0.027f },
-    { 0.155f, -0.041f },
-    { 0.000f, -0.053f },
-    { -0.155f, -0.060f },
-    { -0.294f, -0.058f },
-    { -0.405f, -0.046f },
-    { -0.476f, -0.026f },
-};
-
-static inline std::vector<Vector2> AirfoilP2{
-    { -0.476f, 0.026f },
-    { -0.405f, 0.046f },
-    { -0.294f, 0.058f },
-    { -0.155f, 0.060f },
-    { 0.000f, 0.053f },
-    { 0.155f, 0.041f },
-    { 0.294f, 0.027f },
-    { 0.405f, 0.014f },
-    { 0.476f, 0.005f },
-    { 0.500f, 0.001f }, // This is 0.001 for a small fix. If it's not there, there are some issues for the particles.
-    { 0.476f, -0.005f },
-    { 0.405f, -0.014f },
-    { 0.294f, -0.027f },
-    { 0.155f, -0.041f },
-    { 0.000f, -0.053f },
-    { -0.155f, -0.060f },
-    { -0.294f, -0.058f },
-    { -0.405f, -0.046f },
-    { -0.476f, -0.026f },
-    { -0.500f, 0.000f },
-};
-
 //-------------------------------------------------------------------------
 
 enum class UpdateScheme : uint8_t
@@ -83,7 +37,7 @@ struct PhysicsSettings
     const float  SimulationResolution{ 10.0f }; // X and Y are same scale...
     uint32_t     ParticleCount{ 0 };
     UpdateScheme Scheme{ UpdateScheme::Leapfrog };
-    int32_t      ImplicitMaxIterations{ 20 }; // ImGui doesn't take uint
+    int32_t      ImplicitMaxIterations{ 5 }; // ImGui doesn't take uint
 
     //-------------------------------------------------------------------------
 
@@ -211,7 +165,7 @@ private:
     Vector2 CalculateViscocityForce( Vector2 location ) noexcept;
     Vector2 CalculateViscocityForce( uint32_t index ) noexcept;
 
-    void ApplyMouseAction() noexcept;
+    void ApplyMouseAction( float timestep ) noexcept;
 
     //-------------------------------------------------------------------------
 
@@ -292,6 +246,7 @@ private:
 
     void InitSandbox() noexcept;
     void InitAirfoil() noexcept;
+    void InitObstacle() noexcept;
 
     //-------------------------------------------------------------------------
 
@@ -307,6 +262,15 @@ private:
     Vector2 m_AFOffset{ m_PhysicsSettings.SimulationResolution / 2.0f, m_PhysicsSettings.SimulationResolution / 2.0f };
 
     bool m_AFEnabled{ false };
+
+    //-------------------------------------------------------------------------
+
+    void ObstacleParticleTeleport() noexcept;
+
+    std::vector<Vector2> m_ObstaclesP1;
+    std::vector<Vector2> m_ObstaclesP2;
+
+    bool m_Obstacles{ false };
 
     //-------------------------------------------------------------------------
 };
