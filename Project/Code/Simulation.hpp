@@ -45,6 +45,7 @@ struct PhysicsSettings
     float SmoothingRadius{ 2 * std::sqrt( SimulationResolution * SimulationResolution / ( ParticleCount ) ) };
 
     bool ApplyPressureForce{ true };
+    bool ApplyNearPressure{ true };
     bool ApplyViscocity{ false };
     bool ApplyMouseForce{ false };
 
@@ -53,6 +54,7 @@ struct PhysicsSettings
     // see: https://en.wikipedia.org/wiki/Speed_of_sound
 
     float PressureMultiplier{ 10000.0f / ParticleCount };
+    float NearPressureMultiplier{ 1.0f };
     float Viscocity{ 0.01f }; // Might need tweaking.
 
     bool  ApplyGravity{ false };
@@ -165,6 +167,15 @@ private:
     Vector2 CalculateViscocityForce( Vector2 location ) noexcept;
     Vector2 CalculateViscocityForce( uint32_t index ) noexcept;
 
+    float   CalculateNearDensity( uint32_t index ) noexcept;
+    float   CalculateNearPressure( uint32_t index ) noexcept;
+    Vector2 CalculateNearPressureGradiant( uint32_t index ) noexcept;
+
+    // Todo: Still needs to be implemented.
+    void UpdateNearDensities() noexcept;
+    void UpdateNearPressure() noexcept;
+    void UpdateNearPressureGradiant() noexcept;
+
     void ApplyMouseAction( float timestep ) noexcept;
 
     //-------------------------------------------------------------------------
@@ -231,8 +242,11 @@ private:
     // The variant values, calculated based on the particles.
     // Note: The position for the i'th value is m_Positions[i].
     std::vector<float>   m_Densities;
+    std::vector<float>   m_NearDensities;
     std::vector<float>   m_Pressures;
+    std::vector<float>   m_NearPressures;
     std::vector<Vector2> m_PressureGradiants;
+    std::vector<Vector2> m_NearPressureGradiants;
     std::vector<Vector2> m_ViscocityForces;
 
     // Boundary info:

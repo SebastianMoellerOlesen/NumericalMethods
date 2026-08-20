@@ -62,7 +62,7 @@ Simulation::Simulation( uint32_t size )
     m_DebugSettings.DebugTexture = LoadTextureFromImage( debugImg );
     SetTextureFilter( m_DebugSettings.DebugTexture, TEXTURE_FILTER_BILINEAR );
 
-    InitObstacle();
+    InitAirfoil();
 }
 
 Simulation::~Simulation()
@@ -312,6 +312,7 @@ void Simulation::InitSandbox( /* Change this to take a bool, on whether or not t
     //-------------------------------------------------------------------------
 
     m_PhysicsSettings.ApplyPressureForce = true;
+    m_PhysicsSettings.ApplyNearPressure  = true;
     m_PhysicsSettings.ApplyViscocity     = false;
     m_PhysicsSettings.ApplyGravity       = true;
     m_PhysicsSettings.ApplyMouseForce    = true;
@@ -381,17 +382,23 @@ void Simulation::InitSandbox( /* Change this to take a bool, on whether or not t
     m_Densities.resize( m_PhysicsSettings.ParticleCount );
     UpdateDensities();
 
+    m_NearDensities.resize( m_PhysicsSettings.ParticleCount );
+    UpdateNearDensities();
+
     m_Pressures.resize( m_PhysicsSettings.ParticleCount );
     UpdatePressures();
+
+    m_NearPressures.resize( m_PhysicsSettings.ParticleCount );
+    UpdateNearPressure();
 
     m_PressureGradiants.resize( m_PhysicsSettings.ParticleCount );
     UpdatePressureGradiant();
 
+    m_NearPressureGradiants.resize( m_PhysicsSettings.ParticleCount );
+    UpdateNearPressureGradiant();
+
     m_ViscocityForces.resize( m_PhysicsSettings.ParticleCount );
     UpdateViscocity();
-
-    // Avoid the density only being drawn, when we unpause...
-    DrawDensity(); // <- Doesn't work for some reason... Or the field is very weak?? WFT... It works after unpausing...
 
     //-------------------------------------------------------------------------
 
@@ -409,6 +416,7 @@ void Simulation::InitAirfoil( /* Change this to take a bool, on whether or not t
     //-------------------------------------------------------------------------
 
     m_PhysicsSettings.ApplyPressureForce = true;
+    m_PhysicsSettings.ApplyNearPressure  = true;
     m_PhysicsSettings.ApplyViscocity     = true;
     m_PhysicsSettings.ApplyGravity       = false;
     m_PhysicsSettings.ApplyMouseForce    = false;
@@ -418,16 +426,17 @@ void Simulation::InitAirfoil( /* Change this to take a bool, on whether or not t
 
     //-------------------------------------------------------------------------
 
-    m_Masses                                = 1.0f;
-    m_PhysicsSettings.Paused                = true;
-    m_PhysicsSettings.ParticleCount         = 5000;
-    m_PhysicsSettings.SmoothingRadius       = 0.45f;
-    m_PhysicsSettings.InvTimestepMultiplier = 5.0f; // Large here to avoid them phasing through the airfoil...
-    m_PhysicsSettings.GravityMultiplier     = 0.0f;
-    m_PhysicsSettings.TargetDensity         = 10.0f;
-    m_PhysicsSettings.PressureMultiplier    = 10000.0f;
-    m_PhysicsSettings.Viscocity             = 0.1f;
-    m_PhysicsSettings.Scheme                = UpdateScheme::Implicit;
+    m_Masses                                 = 1.0f;
+    m_PhysicsSettings.Paused                 = true;
+    m_PhysicsSettings.ParticleCount          = 5000;
+    m_PhysicsSettings.SmoothingRadius        = 0.45f;
+    m_PhysicsSettings.InvTimestepMultiplier  = 5.0f; // Large here to avoid them phasing through the airfoil...
+    m_PhysicsSettings.GravityMultiplier      = 0.0f;
+    m_PhysicsSettings.TargetDensity          = 10.0f;
+    m_PhysicsSettings.PressureMultiplier     = 10000.0f;
+    m_PhysicsSettings.NearPressureMultiplier = 10.0f;
+    m_PhysicsSettings.Viscocity              = 0.1f;
+    m_PhysicsSettings.Scheme                 = UpdateScheme::Implicit;
 
     //-------------------------------------------------------------------------
 
@@ -440,10 +449,11 @@ void Simulation::InitAirfoil( /* Change this to take a bool, on whether or not t
 
     //-------------------------------------------------------------------------
 
-    m_AFEnabled  = true;
-    m_AFScale    = 2.0f;
-    m_AFRotation = 4.7f;
-    m_AFOffset   = { 0.0f, 4.4f };
+    m_AFEnabled       = true;
+    m_AFScale         = 2.0f;
+    m_AFRotation      = 4.7f;
+    m_AFOffset        = { 0.0f, 4.1f };
+    m_AFSpawningSpeed = 12.0f;
     UpdateAirfoil();
 
     //-------------------------------------------------------------------------
@@ -484,21 +494,26 @@ void Simulation::InitAirfoil( /* Change this to take a bool, on whether or not t
 
     //-------------------------------------------------------------------------
 
-    // Initialize the fields.
     m_Densities.resize( m_PhysicsSettings.ParticleCount );
     UpdateDensities();
+
+    m_NearDensities.resize( m_PhysicsSettings.ParticleCount );
+    UpdateNearDensities();
 
     m_Pressures.resize( m_PhysicsSettings.ParticleCount );
     UpdatePressures();
 
+    m_NearPressures.resize( m_PhysicsSettings.ParticleCount );
+    UpdateNearPressure();
+
     m_PressureGradiants.resize( m_PhysicsSettings.ParticleCount );
     UpdatePressureGradiant();
 
+    m_NearPressureGradiants.resize( m_PhysicsSettings.ParticleCount );
+    UpdateNearPressureGradiant();
+
     m_ViscocityForces.resize( m_PhysicsSettings.ParticleCount );
     UpdateViscocity();
-
-    // Avoid the density only being drawn, when we unpause...
-    DrawDensity();
 
     //-------------------------------------------------------------------------
 
@@ -590,21 +605,26 @@ void Simulation::InitObstacle() noexcept
 
     //-------------------------------------------------------------------------
 
-    // Initialize the fields.
     m_Densities.resize( m_PhysicsSettings.ParticleCount );
     UpdateDensities();
+
+    m_NearDensities.resize( m_PhysicsSettings.ParticleCount );
+    UpdateNearDensities();
 
     m_Pressures.resize( m_PhysicsSettings.ParticleCount );
     UpdatePressures();
 
+    m_NearPressures.resize( m_PhysicsSettings.ParticleCount );
+    UpdateNearPressure();
+
     m_PressureGradiants.resize( m_PhysicsSettings.ParticleCount );
     UpdatePressureGradiant();
 
+    m_NearPressureGradiants.resize( m_PhysicsSettings.ParticleCount );
+    UpdateNearPressureGradiant();
+
     m_ViscocityForces.resize( m_PhysicsSettings.ParticleCount );
     UpdateViscocity();
-
-    // Avoid the density only being drawn, when we unpause...
-    DrawDensity();
 
     //-------------------------------------------------------------------------
 
@@ -670,6 +690,11 @@ void Simulation::ExplicitUpdate( float timestep ) noexcept
     UpdatePressures();
     UpdatePressureGradiant();
 
+    // Near pressure stufff...
+    UpdateNearDensities();
+    UpdateNearPressure();
+    UpdateNearPressureGradiant();
+
     //-------------------------------------------------------------------------
 
     if ( m_PhysicsSettings.ApplyGravity )
@@ -693,6 +718,14 @@ void Simulation::ExplicitUpdate( float timestep ) noexcept
         for ( uint32_t i = 0; i < m_Positions.size(); i++ )
         {
             m_Velocities[i] += m_PressureGradiants[i] / m_Densities[i] * timestep;
+        }
+
+        if ( m_PhysicsSettings.ApplyNearPressure )
+        {
+            for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+            {
+                m_Velocities[i] += m_NearPressureGradiants[i] / m_Densities[i] * timestep;
+            }
         }
     }
 
@@ -797,6 +830,11 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
             UpdateDensities();
             UpdateViscocity();
 
+            // Near pressure stufff...
+            UpdateNearDensities();
+            UpdateNearPressure();
+            UpdateNearPressureGradiant();
+
             //-------------------------------------------------------------------------
 
             if ( m_PhysicsSettings.ApplyGravity )
@@ -812,6 +850,14 @@ void Simulation::ImplicitUpdate( float timestep ) noexcept
                 for ( uint32_t i = 0; i < m_Positions.size(); i++ )
                 {
                     currAcc[i] += m_ViscocityForces[i] / m_Densities[i];
+                }
+            }
+
+            if ( m_PhysicsSettings.ApplyNearPressure )
+            {
+                for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+                {
+                    currAcc[i] += m_NearPressureGradiants[i] / m_Densities[i];
                 }
             }
 
@@ -912,6 +958,11 @@ void Simulation::LeapfrogUpdate( float timestep ) noexcept
     UpdatePressures();
     UpdatePressureGradiant();
 
+    // Near pressure stufff...
+    UpdateNearDensities();
+    UpdateNearPressure();
+    UpdateNearPressureGradiant();
+
     //-------------------------------------------------------------------------
 
     // We apply the accelerations one by one, and since the forces are already calculated, this is not a problem...
@@ -937,6 +988,14 @@ void Simulation::LeapfrogUpdate( float timestep ) noexcept
         for ( uint32_t i = 0; i < m_Positions.size(); i++ )
         {
             m_Velocities[i] += m_PressureGradiants[i] * timestep / m_Densities[i];
+        }
+
+        if ( m_PhysicsSettings.ApplyNearPressure )
+        {
+            for ( uint32_t i = 0; i < m_Positions.size(); i++ )
+            {
+                m_Velocities[i] += m_NearPressureGradiants[i] / m_Densities[i] * timestep;
+            }
         }
     }
 
@@ -1263,6 +1322,110 @@ Vector2 Simulation::CalculatePressureGradiant( uint32_t index ) noexcept
 
 //-------------------------------------------------------------------------
 
+float Simulation::CalculateNearDensity( uint32_t i ) noexcept
+{
+    Vector2 location         = m_Positions[i];
+    int32_t index            = GetGridIndex( location );
+    auto    cells            = GetNeighbourCells( index );
+    auto    neighbourIndices = cells | std::views::transform( [this]( int32_t cell ) { return GetParticlesInCell( cell ); } ) | std::views::join;
+    float   density          = 0;
+    for ( int32_t i : neighbourIndices )
+    {
+        float distance = Vector2Length( location - m_Positions[i] );
+
+        // We use the Spiky3 for the near pressure.
+        float influence  = Spiky3Kernal2D( m_PhysicsSettings.SmoothingRadius, distance );
+        density         += m_Masses * influence;
+    }
+    return density;
+}
+
+void Simulation::UpdateNearDensities() noexcept
+{
+    std::for_each( std::execution::par_unseq, m_SortedParticles.begin(), m_SortedParticles.end(), [this]( const int32_t i ) {
+        m_NearDensities[i] = CalculateNearDensity( i );
+    } );
+}
+
+//-------------------------------------------------------------------------
+
+float Simulation::CalculateNearPressure( uint32_t index ) noexcept
+{
+    float nearPressure = m_NearDensities[index] * m_PhysicsSettings.NearPressureMultiplier;
+    return nearPressure;
+}
+
+void Simulation::UpdateNearPressure() noexcept
+{
+    std::for_each( std::execution::par_unseq, m_SortedParticles.begin(), m_SortedParticles.end(), [this]( const int32_t i ) {
+        m_NearPressures[i] = CalculateNearPressure( i );
+    } );
+}
+
+//-------------------------------------------------------------------------
+
+Vector2 Simulation::CalculateNearPressureGradiant( uint32_t index ) noexcept
+{
+    //-------------------------------------------------------------------------
+
+    int32_t cell             = GetGridIndex( m_Positions[index] );
+    auto    cells            = GetNeighbourCells( cell );
+    auto    neighbourIndices = cells | std::views::transform( [this]( int32_t cell ) { return GetParticlesInCell( cell ); } ) | std::views::join;
+
+    //-------------------------------------------------------------------------
+
+    Vector2 gradient = Vector2Zero();
+
+    //-------------------------------------------------------------------------
+
+    for ( int32_t i : neighbourIndices )
+    {
+
+        //-------------------------------------------------------------------------
+
+        if ( i == index )
+        {
+            continue;
+        }
+
+        //-------------------------------------------------------------------------
+
+        Vector2 difference = m_Positions[index] - m_Positions[i];
+        float   distance   = Vector2Length( difference );
+
+        //-------------------------------------------------------------------------
+
+        if ( distance == 0 )
+        {
+            // The GetRandomDir() returns a normalized vector, so no need to normalize.
+            difference = GetRandomDir();
+        }
+
+        //-------------------------------------------------------------------------
+
+        float influence           = Spiky3KernalDerivative2D( m_PhysicsSettings.SmoothingRadius, distance );
+        float averageNearPressure = ( m_NearPressures[i] + m_NearPressures[index] ) * 0.5f;
+
+        gradient -= Vector2Normalize( difference ) * m_Masses * influence * averageNearPressure / m_Densities[i];
+
+        //-------------------------------------------------------------------------
+    }
+
+    //-------------------------------------------------------------------------
+
+    return gradient;
+
+    //-------------------------------------------------------------------------
+}
+
+void Simulation::UpdateNearPressureGradiant() noexcept
+{
+    std::for_each( std::execution::par_unseq, m_SortedParticles.begin(), m_SortedParticles.end(),
+                   [this]( const int32_t i ) { m_NearPressureGradiants[i] = CalculateNearPressureGradiant( i ); } );
+}
+
+//-------------------------------------------------------------------------
+
 Vector2 Simulation::CalculateViscocityForce( uint32_t index ) noexcept
 {
 
@@ -1330,33 +1493,35 @@ void Simulation::UpdateAirfoil() noexcept
 void Simulation::AirfoilParticleTeleport() noexcept
 {
 
-    int32_t colorHere  = GetGridIndex( { m_AFOffset.x - 0.5f, m_PhysicsSettings.SimulationResolution / 2.0f } );
-    int32_t colorHere2 = GetGridIndex( { m_AFOffset.x - 0.5f, m_PhysicsSettings.SimulationResolution / 2.0f - 1.0f } );
+    int32_t colorHere  = GetGridIndex( { m_AFOffset.x - 0.5f, m_AFOffset.y } );
+    int32_t colorHere2 = colorHere - m_GridWidth;
+    int32_t colorHere3 = colorHere2 - m_GridWidth;
+    int32_t colorHere4 = colorHere + m_GridWidth;
 
-    std::for_each( std::execution::par_unseq, m_SortedParticles.begin(), m_SortedParticles.end(), [this, &colorHere, &colorHere2]( int32_t index ) {
+    std::for_each( std::execution::par_unseq, m_SortedParticles.begin(), m_SortedParticles.end(), [this, &colorHere, &colorHere2, colorHere4, colorHere3]( int32_t index ) {
         Vector2& pos = m_Positions[index];
         if ( pos.x > m_PhysicsSettings.SimulationResolution + 5 )
         {
-            pos.x                 = -1.0f;
-            m_Velocities[index].x = m_AFSpawningSpeed;
-            // m_ParticleColors[index] = BLUE;
+            pos.x                   = -1.0f;
+            m_Velocities[index].x   = m_AFSpawningSpeed;
+            m_ParticleColors[index] = BLUE;
         }
 
         int32_t particleIdx = GetGridIndex( pos );
 
-        if ( colorHere == particleIdx )
+        if ( colorHere == particleIdx || colorHere4 == particleIdx )
         {
             m_ParticleColors[index] = PINK;
         }
-        if ( colorHere2 == particleIdx )
+        if ( colorHere2 == particleIdx || colorHere3 == particleIdx )
         {
             m_ParticleColors[index] = LIME;
         }
 
-        if ( pos.x > m_AFOffset.x - 0.75f && pos.x < m_AFOffset.x - 0.5f )
-        {
-            m_ParticleColors[index] = BLUE;
-        }
+        // if ( pos.x > m_AFOffset.x - 0.75f && pos.x < m_AFOffset.x - 0.5f )
+        // {
+        //     m_ParticleColors[index] = BLUE;
+        // }
     } );
 }
 
@@ -1591,6 +1756,8 @@ void Simulation::DrawPhysicsOverlay() noexcept
 
     ImGui::Checkbox( " Pressure Force ", &m_PhysicsSettings.ApplyPressureForce );
     ImGui::SameLine();
+    ImGui::Checkbox( " Near Pressure Force ", &m_PhysicsSettings.ApplyNearPressure );
+    ImGui::SameLine();
     ImGui::Checkbox( " Viscocity ", &m_PhysicsSettings.ApplyViscocity );
     ImGui::SameLine();
     ImGui::Checkbox( " Gravity ", &m_PhysicsSettings.ApplyGravity );
@@ -1598,6 +1765,7 @@ void Simulation::DrawPhysicsOverlay() noexcept
     ImGui::Checkbox( " Mouse ", &m_PhysicsSettings.ApplyMouseForce );
 
     if ( m_PhysicsSettings.ApplyPressureForce ) { ImGui::InputFloat( "Pressure Multiplier", &m_PhysicsSettings.PressureMultiplier, 0.1f, 1.0f ); }
+    if ( m_PhysicsSettings.ApplyNearPressure ) { ImGui::InputFloat( "Near Pressure Multiplier", &m_PhysicsSettings.NearPressureMultiplier, 0.1f, 1.0f ); }
     if ( m_PhysicsSettings.ApplyViscocity ) { ImGui::InputFloat( "Viscocity", &m_PhysicsSettings.Viscocity, 0.01f, 0.1f ); }
     if ( m_PhysicsSettings.ApplyGravity ) { ImGui::InputFloat( "Gravity Multiplier", &m_PhysicsSettings.GravityMultiplier, 0.01f, 0.1f ); }
 
